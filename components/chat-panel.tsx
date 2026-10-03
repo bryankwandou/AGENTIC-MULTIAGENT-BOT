@@ -3,8 +3,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, BookmarkPlus, Check, Copy, RotateCcw, Square } from "lucide-react";
 import { AxiomAvatar, Lamp } from "@/components/axiom-mark";
+import { BotAvatar, PERSONA_BY_ID } from "@/components/bot-avatar";
 import { Markdown } from "@/components/markdown";
-import { PERSONAS, PLAYBOOKS, SLASH_COMMANDS } from "@/lib/catalog";
+import { PERSONAS, PLAYBOOKS, SLASH_COMMANDS, type PersonaId } from "@/lib/catalog";
 import { cn } from "@/lib/cn";
 import { abortSend, regenerateLast, sendJob, useSender } from "@/lib/chat-sender";
 import { emitFloor } from "@/lib/floor-bus";
@@ -95,21 +96,24 @@ export function ChatPanel({ engineReady, kernelChars }: { engineReady: boolean |
               title={p.blurb}
               onClick={() => setPersona(p.id)}
               className={cn(
-                "h-8 shrink-0 rounded-full px-3 text-xs transition-colors",
-                on ? "bg-accent text-accent-fg" : "text-muted hover:bg-elevated hover:text-fg",
+                "flex h-8 shrink-0 items-center gap-1.5 rounded-full border pr-3 pl-1 text-xs transition-colors",
+                on ? "border-line-strong bg-elevated text-fg" : "border-transparent text-muted hover:bg-elevated/60 hover:text-fg",
               )}
             >
-              {idUi ? p.nameId : p.name}
+              <BotAvatar id={p.id} size={22} className={cn(!on && "opacity-70")} />
+              <span className={cn(on && "font-medium")}>{p.bot}</span>
+              <span className={cn("hidden text-[11px] md:inline", on ? "text-muted" : "text-subtle")}>{idUi ? p.nameId : p.name}</span>
             </button>
           );
         })}
-        <span className="ml-auto hidden shrink-0 pl-3 text-[11px] text-subtle italic xl:block">{persona.blurb}</span>
+        <span className="ml-auto hidden shrink-0 pl-3 text-[11px] text-subtle italic 2xl:block">{persona.blurb}</span>
       </div>
 
       <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-4 py-8 md:px-10">
         {empty ? (
           <EmptyState
             idUi={idUi}
+            personaId={persona.id}
             personaName={idUi ? persona.nameId : persona.name}
             personaBlurb={persona.blurb}
             kernelChars={kernelChars}
@@ -132,6 +136,7 @@ export function ChatPanel({ engineReady, kernelChars }: { engineReady: boolean |
                 key={m.id}
                 m={m}
                 idUi={idUi}
+                fallbackBot={persona.id}
                 live={busy && m.id === lastAssistantId}
                 phase={phase}
                 isLast={m.id === lastAssistantId}
@@ -229,7 +234,7 @@ export function ChatPanel({ engineReady, kernelChars }: { engineReady: boolean |
           <div className="flex items-center gap-3 px-2 pt-1 pb-0.5 font-mono text-[10px] text-subtle">
             <span className="flex items-center gap-1.5">
               <Lamp live={busy} tone={engineReady === false ? "warn" : "signal"} className="size-1.5" />
-              {idUi ? persona.nameId : persona.name}
+              {persona.bot} · {idUi ? persona.nameId : persona.name}
             </span>
             <span>kernel {compileMode} · {(kernelChars / 1000).toFixed(1)}k</span>
             <span className="hidden sm:inline">temp {temperature.toFixed(1)}</span>
@@ -246,6 +251,7 @@ export function ChatPanel({ engineReady, kernelChars }: { engineReady: boolean |
 function Message({
   m,
   idUi,
+  fallbackBot,
   live,
   phase,
   isLast,
@@ -254,6 +260,8 @@ function Message({
 }: {
   m: ChatMessage;
   idUi: boolean;
+  /** Replies from before bots signed their messages show the session's bot. */
+  fallbackBot: PersonaId;
   live: boolean;
   phase: "compile" | "stream";
   isLast: boolean;
@@ -262,6 +270,7 @@ function Message({
 }) {
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
+  const who = PERSONA_BY_ID[m.meta?.persona ?? fallbackBot];
 
   if (m.role === "user") {
     return (
@@ -275,10 +284,12 @@ function Message({
 
   return (
     <article className="group flex animate-rise gap-4">
-      <AxiomAvatar size={30} live={live} className="mt-0.5 hidden sm:inline-flex" />
+      <BotAvatar id={who.id} size={30} live={live} className="mt-0.5 hidden sm:inline-flex" />
       <div className="min-w-0 flex-1">
         <div className="mb-2 flex items-center gap-2 font-mono text-[10px] tracking-[0.16em] text-subtle uppercase">
-          <span className="text-muted">Axiom</span>
+          <BotAvatar id={who.id} size={16} className="sm:hidden" />
+          <span style={{ color: who.color }}>{who.bot}</span>
+          <span>· {idUi ? who.nameId : who.name}</span>
           {m.meta?.model ? <span>· {m.meta.model}</span> : null}
           {m.meta?.ms ? <span className="tabular-nums">· {(m.meta.ms / 1000).toFixed(1)}s</span> : null}
         </div>
@@ -347,6 +358,7 @@ function ActionButton({ label, onClick, children }: { label: string; onClick: ()
 
 function EmptyState({
   idUi,
+  personaId,
   personaName,
   personaBlurb,
   kernelChars,
@@ -357,6 +369,7 @@ function EmptyState({
   onSeed,
 }: {
   idUi: boolean;
+  personaId: PersonaId;
   personaName: string;
   personaBlurb: string;
   kernelChars: number;
@@ -368,7 +381,13 @@ function EmptyState({
 }) {
   return (
     <div className="mx-auto flex max-w-[46rem] animate-rise flex-col pt-[6vh]">
-      <AxiomAvatar size={52} live />
+      <div className="flex items-center gap-3">
+        <AxiomAvatar size={52} live />
+        <BotAvatar id={personaId} size={40} className="-ml-5 ring-4 ring-bg" />
+        <p className="font-mono text-[10px] tracking-[0.16em] text-subtle uppercase">
+          {PERSONA_BY_ID[personaId].bot} · {personaName}
+        </p>
+      </div>
       <h1 className="mt-6 font-display text-5xl leading-[1.02] font-semibold tracking-tight text-balance md:text-6xl">
         {idUi ? "Stasiun siap." : "Station ready."}
         <br />
@@ -376,8 +395,8 @@ function EmptyState({
       </h1>
       <p className="mt-4 max-w-lg text-sm leading-relaxed text-muted text-pretty">
         {idUi
-          ? `AXIOM berjalan sebagai ${personaName}: ${personaBlurb.toLowerCase()} Kernel dikompilasi dari megaprompt setiap giliran.`
-          : `AXIOM is running as ${personaName}: ${personaBlurb.toLowerCase()} The kernel is compiled from the megaprompt every turn.`}
+          ? `${PERSONA_BY_ID[personaId].bot} memegang job ini sebagai ${personaName}: ${personaBlurb.toLowerCase()} Kernel dikompilasi dari megaprompt setiap giliran. Ganti bot di atas.`
+          : `${PERSONA_BY_ID[personaId].bot} takes this job as the ${personaName}: ${personaBlurb.toLowerCase()} The kernel is compiled from the megaprompt every turn. Switch bots above.`}
       </p>
       <p className="eyebrow mt-8">
         kernel {compileMode} · {kernelChars.toLocaleString()}c · temp {temperature} · {maxTokens} tok

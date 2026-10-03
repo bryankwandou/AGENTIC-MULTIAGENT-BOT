@@ -12,6 +12,7 @@ import { useStation } from "@/lib/store";
 import { decideApproval } from "@/lib/team/client";
 import { useTeam, type LaneStatus, type TeamLane, type TeamRun } from "@/lib/team/store";
 import { LEAD, MEMORY_MAX_CHARS, MEMORY_MAX_NOTES } from "@/lib/team/types";
+import { RunTimeline } from "@/components/team/run-timeline";
 import { PHASE_META, fmtElapsed } from "./phase";
 import type { AgentSnapshot } from "./world";
 
@@ -37,7 +38,7 @@ export function FloorDrawer({ tab, onTab, bot, agent, mode, pinned, onPin, onAss
     <aside className="absolute inset-y-0 right-0 z-20 flex w-full max-w-[25rem] flex-col border-l border-line bg-surface/95 backdrop-blur animate-fade lg:static lg:w-[24rem] lg:max-w-none lg:bg-surface/60">
       <div className="flex items-center gap-1 border-b border-line px-2 py-2">
         <TabButton on={tab === "live"} onClick={() => onTab("live")}>
-          <Lamp live tone="signal" className="size-1.5" /> Live
+          <Lamp live tone="signal" className="size-1.5" /> {idUi ? "Langsung" : "Live"}
         </TabButton>
         <TabButton on={tab === "bot"} onClick={() => onTab("bot")}>
           <span className="size-2 rounded-full" style={{ background: p.color }} /> {p.bot}
@@ -111,7 +112,7 @@ function SoloLive({ idUi }: { idUi: boolean }) {
       <Empty
         icon={<MessageSquare className="size-5" />}
         title={idUi ? "Belum ada job solo" : "No solo job yet"}
-        text={idUi ? "Beri bot sebuah job di bawah, atau tekan ▶ Showcase untuk tur lengkap." : "Give a bot a job below, or press ▶ Showcase for the full tour."}
+        text={idUi ? "Beri bot sebuah job di bawah, atau tekan ▶ Tur demo untuk tur lengkap." : "Give a bot a job below, or press ▶ Showcase for the full tour."}
       />
     );
   }
@@ -279,6 +280,8 @@ function TeamLive({ idUi }: { idUi: boolean }) {
               </li>
             ))}
       </ul>
+
+      {run.lanes.length ? <RunTimeline run={run} idUi={idUi} compact /> : null}
 
       {run.final.status !== "idle" ? (
         <section className="rounded-xl border border-line-strong bg-bg/50 px-3.5 py-3">

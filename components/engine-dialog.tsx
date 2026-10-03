@@ -12,13 +12,13 @@ import { engineHeaders, useStation, type EngineSettings } from "@/lib/store";
 
 export type EngineSummary = { live: boolean; label: string; detail: string; source: "byok" | "server" | "demo"; local?: boolean };
 
-export function engineSummary(settings: EngineSettings, status: EngineStatus | null): EngineSummary {
+export function engineSummary(settings: EngineSettings, status: EngineStatus | null, idUi = false): EngineSummary {
   const p = settings.provider === "server" ? undefined : getProvider(settings.provider);
   if (p && (settings.key || p.local)) {
-    return { live: true, label: p.name, detail: `${settings.model || p.models[0] || "model?"}${p.local ? " · local" : ""}`, source: "byok", local: p.local };
+    return { live: true, label: p.name, detail: `${settings.model || p.models[0] || "model?"}${p.local ? (idUi ? " · lokal" : " · local") : ""}`, source: "byok", local: p.local };
   }
   if (status?.engine) return { live: true, label: status.engine.name, detail: status.engine.models[0] ?? "", source: "server" };
-  return { live: false, label: "Demo mode", detail: "scripted replies", source: "demo" };
+  return { live: false, label: idUi ? "Mode demo" : "Demo mode", detail: idUi ? "balasan berskrip" : "scripted replies", source: "demo" };
 }
 
 type TestResult = { ok: boolean; error?: string; model?: string; ms?: number; reply?: string; name?: string };

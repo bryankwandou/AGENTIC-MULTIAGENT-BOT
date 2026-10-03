@@ -28,6 +28,7 @@ import { useStation } from "@/lib/store";
 import { abortTeam, decideApproval, runRoutine, runTeam, startRoutineClock } from "@/lib/team/client";
 import { hydrateTeam, useTeam, type Routine, type RoutineEvery, type TeamLane, type TeamRun } from "@/lib/team/store";
 import { LEAD, MEMORY_MAX_CHARS, MEMORY_MAX_NOTES } from "@/lib/team/types";
+import { RunTimeline } from "./run-timeline";
 
 const BY_ID = PERSONA_BY_ID;
 const EVERY: RoutineEvery[] = [0, 15, 30, 60];
@@ -728,6 +729,8 @@ function RunView({ run, idUi, live }: { run: TeamRun; idUi: boolean; live: boole
           ))}
         </div>
       ) : null}
+
+      {lanes ? <RunTimeline run={run} idUi={idUi} /> : null}
 
       {lanes ? (
         <section>

@@ -83,7 +83,7 @@ export function StationShell() {
   }, [setHydrated]);
 
   const stats = useMemo(() => megapromptStats(), []);
-  const summary = engineSummary(engineSettings, engine);
+  const summary = engineSummary(engineSettings, engine, language !== "en");
   const session = sessions.find((s) => s.id === activeSessionId) ?? sessions[0];
   const kernel = useMemo(
     () =>
@@ -253,7 +253,7 @@ export function StationShell() {
           >
             <span className="flex min-w-0 items-center gap-2">
               <Lamp tone={summary.live ? "signal" : engine ? "warn" : "off"} live={!engine && !engineSettings.key} />
-              <span className="truncate">{summary.live ? summary.label : engine ? "Demo mode" : "…"}</span>
+              <span className="truncate">{summary.live || engine ? summary.label : "…"}</span>
             </span>
             <span className="shrink-0 text-subtle tabular-nums">{stats.lines.toLocaleString()} ln</span>
           </button>

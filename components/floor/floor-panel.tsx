@@ -122,7 +122,7 @@ export function FloorPanel({ summary }: { summary: EngineSummary }) {
     { k: idUi ? "kantin" : "canteen", v: counts.coffee },
     { k: idUi ? "jalan" : "walking", v: counts.walking },
     { k: idUi ? "lainnya" : "elsewhere", v: counts.other },
-    { k: "jobs", v: floorStats.jobs },
+    { k: idUi ? "job" : "jobs", v: floorStats.jobs },
   ];
 
   return (
@@ -269,11 +269,11 @@ export function FloorPanel({ summary }: { summary: EngineSummary }) {
                 title={idUi ? "Tur: job solo lalu run tim dengan persetujuan" : "Tour: a solo job, then a team run with an approval"}
               >
                 <Play className="size-3 fill-current" />
-                {touring ? (idUi ? "tur berjalan" : "touring") : "showcase"}
+                {touring ? (idUi ? "tur berjalan" : "touring") : idUi ? "tur demo" : "showcase"}
               </button>
               {drawer === null ? (
                 <button type="button" onClick={() => setDrawer("live")} className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 font-mono text-[10px] text-muted uppercase hover:bg-elevated hover:text-fg">
-                  <PanelRightOpen className="size-3.5" /> live
+                  <PanelRightOpen className="size-3.5" /> {idUi ? "langsung" : "live"}
                 </button>
               ) : null}
             </div>

@@ -51,6 +51,8 @@ export type Phase = "idle" | "thinking" | "waiting" | "writing" | "done" | "erro
 type Spot = { x: number; y: number; face: Face; seat?: boolean; taken?: PersonaId | null; chair?: string | null };
 
 type Bubble = { text: string; kind: "say" | "think" | "stream" | "ok" | "err" | "warn"; until: number; born: number };
+/** A measured bubble in screen space; `ax/ay` is the bot it belongs to. */
+type BubbleBox = { a: Agent; lines: string[]; head: string; x: number; y: number; w: number; h: number; ax: number; ay: number; fade: number; cut: boolean };
 
 type Look = {
   skin: string;
@@ -341,9 +343,11 @@ export class FloorWorld {
   private staticBehind: number[][] = [];
   private kernelFlash = -1e9;
   private particles: Particle[] = [];
+  /** Who handed work to whom, drawn as live links until the teammate finishes. */
+  private links = new Map<string, { from: PersonaId; to: PersonaId; born: number; until: number }>();
   private roomba = { x: 14.5, y: 16.5, path: [] as { x: number; y: number }[], face: "E" as Face, wait: 0 };
   private cache: { canvas: HTMLCanvasElement; key: string } | null = null;
-  private view = { s: 1, ox: 0, oy: 0, dpr: 1 };
+  private view = { s: 1, ox: 0, oy: 0, dpr: 1, w: 0, h: 0 };
   /** Camera: z = zoom over "fit", (x, y) = centre in iso px. Follows the busy bots unless the operator takes over. */
   private cam = { z: 1, x: (GW - GH) * HW * 0.5, y: ((GW + GH) * HH - WALL_H) * 0.5 };
   private user = { z: 1, x: (GW - GH) * HW * 0.5, y: ((GW + GH) * HH - WALL_H) * 0.5 };
@@ -879,6 +883,7 @@ export class FloorWorld {
       case "job": {
         const a = this.agent(e.persona);
         if (!a) return;
+        this.endLinks(e.persona, 0, "from"); // a lead starting over drops its old links; a teammate's job keeps its own
         this.lastPersona = e.persona;
         a.phase = "thinking";
         a.phaseAt = now;
@@ -913,6 +918,7 @@ export class FloorWorld {
       case "done": {
         const a = this.agent(e.persona);
         if (!a) return;
+        this.endLinks(e.persona, 1600);
         a.phase = "done";
         a.phaseAt = now;
         a.note = `${e.chars.toLocaleString()} ${this.t.chars} · ${(e.ms / 1000).toFixed(1)}s${e.model ? ` · ${e.model}` : ""}`;
@@ -926,6 +932,7 @@ export class FloorWorld {
       case "error": {
         const a = this.agent(e.persona);
         if (!a) return;
+        this.endLinks(e.persona, 1600);
         a.phase = "error";
         a.phaseAt = now;
         this.say(a, `⚠ ${short(e.message, 70)}`, "err", 8000);
@@ -935,6 +942,7 @@ export class FloorWorld {
       case "stopped": {
         const a = this.agent(e.persona);
         if (!a) return;
+        this.endLinks(e.persona, 600);
         a.phase = "idle";
         a.path = [];
         a.goal = null;
@@ -955,6 +963,7 @@ export class FloorWorld {
           face: to.desk.face === "S" ? "W" : "E",
         };
         from.visitOf = to.id;
+        this.links.set(`${from.id}>${to.id}`, { from: from.id, to: to.id, born: now, until: Infinity });
         this.go(from, side, "visit", 2600);
         this.say(from, `→ ${to.bot}: ${short(e.text, 40)}`, "say", 4200);
         break;
@@ -1385,6 +1394,75 @@ export class FloorWorld {
 
   /* -------------------------------------------------------------- render */
 
+  /** A bot finished (or a lead started over): its links fade out over `ms`. */
+  private endLinks(id: PersonaId, ms: number, side: "from" | "any" = "any") {
+    for (const [k, l] of this.links) {
+      if (l.from !== id && (side === "from" || l.to !== id)) continue;
+      if (ms <= 0) this.links.delete(k);
+      else l.until = Math.min(l.until, this.now + ms);
+    }
+  }
+
+  /**
+   * Collaboration links: an arc from the lead to each teammate it handed work to. Packets travel out
+   * while the teammate thinks and flow back while it writes its part.
+   */
+  private drawLinks(c: CanvasRenderingContext2D) {
+    for (const [k, l] of this.links) {
+      if (this.now > l.until) {
+        this.links.delete(k);
+        continue;
+      }
+      const a = this.agent(l.from);
+      const b = this.agent(l.to);
+      if (!a || !b) continue;
+      const [ax, ay] = iso(a.x, a.y, 30 * CHAR);
+      const [bx, by] = iso(b.x, b.y, 30 * CHAR);
+      const d = Math.hypot(bx - ax, by - ay);
+      if (d < 14) continue; // standing together: the conversation is the link
+      const alpha = Math.min(1, (this.now - l.born) / 450) * (l.until === Infinity ? 1 : Math.max(0, (l.until - this.now) / 1600)) * Math.min(1, (d - 14) / 20);
+      const mx = (ax + bx) / 2;
+      const my = (ay + by) / 2 - (16 + d * 0.2);
+      const px1 = 1 / Math.max(0.4, this.view.s); // one CSS pixel in world units: links read the same at any zoom
+      c.save();
+      c.globalAlpha = alpha;
+      c.lineCap = "round";
+      c.strokeStyle = rgba(b.color, 0.2);
+      c.lineWidth = 5 * px1;
+      c.beginPath();
+      c.moveTo(ax, ay);
+      c.quadraticCurveTo(mx, my, bx, by);
+      c.stroke();
+      c.strokeStyle = rgba(b.color, 0.85);
+      c.lineWidth = 1.5 * px1;
+      c.setLineDash([4 * px1, 5 * px1]);
+      c.lineDashOffset = (-this.now / 45) * px1;
+      c.stroke();
+      c.setLineDash([]);
+      const back = b.phase === "writing" || b.phase === "done";
+      for (let i = 0; i < 3; i++) {
+        const t0 = (this.now / 1500 + i / 3) % 1;
+        const t = back ? 1 - t0 : t0;
+        const u = 1 - t;
+        const px = u * u * ax + 2 * u * t * mx + t * t * bx;
+        const py = u * u * ay + 2 * u * t * my + t * t * by;
+        const r = Math.max(5, 7 * px1);
+        const g = c.createRadialGradient(px, py, 0, px, py, r);
+        g.addColorStop(0, rgba(b.color, 0.6));
+        g.addColorStop(1, rgba(b.color, 0));
+        c.fillStyle = g;
+        c.beginPath();
+        c.arc(px, py, r, 0, Math.PI * 2);
+        c.fill();
+        c.fillStyle = "rgba(236,236,232,0.95)";
+        c.beginPath();
+        c.arc(px, py, Math.max(1.15, 1.8 * px1), 0, Math.PI * 2);
+        c.fill();
+      }
+      c.restore();
+    }
+  }
+
   private drawRings(c: CanvasRenderingContext2D) {
     for (const a of this.agents) {
       const sel = a.id === this.selected;
@@ -1519,7 +1597,7 @@ export class FloorWorld {
     }
     const ox = w / 2 - cx * s;
     const oy = h / 2 - cy * s;
-    this.view = { s, ox, oy, dpr };
+    this.view = { s, ox, oy, dpr, w, h };
 
     // Static layer is cached in world space at a resolution bucket that follows the zoom target.
     const hour = new Date().getHours() + new Date().getMinutes() / 60;
@@ -1577,6 +1655,7 @@ export class FloorWorld {
 
     this.drawGlow(ctx);
     this.drawParticles(ctx);
+    this.drawLinks(ctx);
 
     // Night grade + vignette in screen space.
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -2212,11 +2291,41 @@ export class FloorWorld {
     const v = this.view;
     this.drawNpcTags(c);
     const order = [...this.agents].sort((p, q) => p.x + p.y - (q.x + q.y));
+    // Bubbles are laid out together so parallel bots never cover each other; zoomed out they shrink to one line.
+    const lines = v.s < 0.95 ? 1 : v.s < 1.35 ? 2 : 3;
+    const placed: BubbleBox[] = [];
+    // Name tags of bots without a bubble are obstacles too, so a bubble never hides a teammate's name.
+    c.font = "600 10.5px IBM Plex Sans, system-ui, sans-serif";
+    const tags = order
+      .filter((a) => !a.bubble)
+      .map((a) => {
+        const [wx, wy] = iso(a.x, a.y, (40 - a.sit * 4.5) * CHAR);
+        const tw = c.measureText(a.bot).width + 20;
+        return { x: wx * v.s + v.ox - tw / 2, y: wy * v.s + v.oy - 9, w: tw, h: 16 };
+      });
+    const pending = order
+      .filter((a) => a.bubble)
+      .map((a) => {
+        const [wx, wy] = iso(a.x, a.y, (40 - a.sit * 4.5) * CHAR);
+        return this.measureBubble(c, a, wx * v.s + v.ox, wy * v.s + v.oy - 3, lines);
+      })
+      .filter((b): b is BubbleBox => b !== null)
+      .sort((p, q) => q.ay - p.ay); // nearest bots keep their spot; those behind stack upwards
+    for (const b of pending) {
+      for (let guard = 0; guard < 8; guard++) {
+        const hit = [...placed, ...tags].find((o) => b.x < o.x + o.w + 4 && o.x < b.x + b.w + 4 && b.y < o.y + o.h + 6 && o.y < b.y + b.h + 6);
+        if (!hit) break;
+        b.y = hit.y - b.h - 8;
+      }
+      b.y = Math.max(6, b.y);
+      placed.push(b);
+    }
+    for (const b of placed.reverse()) this.paintBubble(c, b);
     for (const a of order) {
       const [wx, wy] = iso(a.x, a.y, (40 - a.sit * 4.5) * CHAR);
       const sx = wx * v.s + v.ox;
       const sy = wy * v.s + v.oy;
-      if (a.bubble) this.drawBubble(c, a, sx, sy - 3);
+      if (a.bubble) continue;
       else {
         c.font = "600 10.5px IBM Plex Sans, system-ui, sans-serif";
         const tw = c.measureText(a.bot).width;
@@ -2234,19 +2343,18 @@ export class FloorWorld {
     }
   }
 
-  private drawBubble(c: CanvasRenderingContext2D, a: Agent, sx: number, sy: number) {
+  /** Size and natural position of a bot's bubble (CSS px); null when it has faded out. */
+  private measureBubble(c: CanvasRenderingContext2D, a: Agent, sx: number, sy: number, maxLines: number): BubbleBox | null {
     const b = a.bubble!;
-    const age = this.now - b.born;
-    const fade = Math.min(1, age / 180) * Math.min(1, (b.until - this.now) / 300);
-    if (fade <= 0) return;
+    const fade = Math.min(1, (this.now - b.born) / 180) * Math.min(1, (b.until - this.now) / 300);
+    if (fade <= 0) return null;
     let text = b.text.replace(/\s+/g, " ").trim();
-    const maxW = 230;
+    const maxW = maxLines === 1 ? 170 : maxLines === 2 ? 205 : 230;
     c.font = "500 11.5px IBM Plex Sans, system-ui, sans-serif";
     if (b.kind === "stream" && text.length > 140) text = `…${text.slice(-140)}`;
-    const words = text.split(" ");
     const lines: string[] = [];
     let cur = "";
-    for (const w of words) {
+    for (const w of text.split(" ")) {
       const t = cur ? `${cur} ${w}` : w;
       if (c.measureText(t).width > maxW && cur) {
         lines.push(cur);
@@ -2254,16 +2362,29 @@ export class FloorWorld {
       } else cur = t;
     }
     if (cur) lines.push(cur);
-    while (lines.length > 3) lines.shift();
+    // Streams show their newest words; everything else its opening words.
+    const cut = b.kind !== "stream" && lines.length > maxLines;
+    if (b.kind === "stream") while (lines.length > maxLines) lines.shift();
+    else if (cut) {
+      lines.length = maxLines;
+      lines[maxLines - 1] = `${lines[maxLines - 1]!.replace(/[\s.,;:]*$/, "")}…`;
+    }
     if (b.kind === "stream" && lines.length) lines[lines.length - 1] += Math.floor(this.now / 400) % 2 ? " ▍" : "";
     const tw = Math.max(...lines.map((l) => c.measureText(l).width), 30);
-    const head = `${a.bot}`;
     c.font = "700 9px IBM Plex Mono, monospace";
-    const hw = c.measureText(head.toUpperCase()).width;
-    const bw = Math.max(tw, hw + 14) + 20;
-    const bh = lines.length * 15 + 26;
-    const bx = sx - bw / 2;
-    const by = sy - bh - 10;
+    const T = this.t.tag;
+    const tag = { say: "", think: a.phase === "waiting" ? T.wait : T.think, stream: T.write, ok: T.ok, err: T.err, warn: a.phase === "approval" ? T.approval : "" }[b.kind];
+    const head = `${a.bot.toUpperCase()}${tag}`;
+    const w = Math.max(tw, c.measureText(head).width + 14) + 20;
+    const h = lines.length * 15 + 26;
+    const vw = this.view.w || 9999;
+    const x = Math.min(Math.max(6, sx - w / 2), vw - w - 6);
+    return { a, lines, head, x, y: sy - h - 10, w, h, ax: sx, ay: sy, fade, cut };
+  }
+
+  private paintBubble(c: CanvasRenderingContext2D, bx: BubbleBox) {
+    const { a, lines, head, x, y, w, h, ax, ay, fade, cut } = bx;
+    const b = a.bubble!;
     const palette = {
       say: ["rgba(240,239,234,0.97)", "#16181b", "#5c615c"],
       think: ["rgba(214,211,200,0.96)", "#16181b", "#5c615c"],
@@ -2272,13 +2393,30 @@ export class FloorWorld {
       err: ["rgba(196,92,74,0.97)", "#fff3ef", "#ffd9cf"],
       warn: ["rgba(214,178,120,0.98)", "#1b150c", "#5a4320"],
     }[b.kind];
+    const displaced = ay - 10 - (y + h) > 6;
+    const tx = Math.min(Math.max(ax, x + 14), x + w - 14);
     c.save();
     c.globalAlpha = fade;
+    if (displaced) {
+      // Pushed up by a neighbour's bubble: a leader line keeps it attached to its bot.
+      c.strokeStyle = rgba(a.color, 0.75);
+      c.lineWidth = 1;
+      c.setLineDash([2, 2.5]);
+      c.beginPath();
+      c.moveTo(tx, y + h + 3);
+      c.lineTo(ax, ay - 4);
+      c.stroke();
+      c.setLineDash([]);
+      c.fillStyle = a.color;
+      c.beginPath();
+      c.arc(ax, ay - 4, 2, 0, Math.PI * 2);
+      c.fill();
+    }
     c.shadowColor = "rgba(0,0,0,0.5)";
     c.shadowBlur = 14;
     c.shadowOffsetY = 4;
     c.fillStyle = palette[0]!;
-    rr(c, bx, by, bw, bh, 9);
+    rr(c, x, y, w, h, 9);
     c.fill();
     c.shadowColor = "transparent";
     if (b.kind === "stream") {
@@ -2289,34 +2427,32 @@ export class FloorWorld {
     c.fillStyle = palette[0]!;
     if (b.kind === "think") {
       c.beginPath();
-      c.arc(sx + 4, by + bh + 5, 3.4, 0, Math.PI * 2);
-      c.arc(sx + 1, by + bh + 11, 2, 0, Math.PI * 2);
+      c.arc(tx + 4, y + h + 5, 3.4, 0, Math.PI * 2);
+      c.arc(tx + 1, y + h + 11, 2, 0, Math.PI * 2);
       c.fill();
     } else {
       c.beginPath();
-      c.moveTo(sx - 6, by + bh - 1);
-      c.lineTo(sx + 6, by + bh - 1);
-      c.lineTo(sx, by + bh + 8);
+      c.moveTo(tx - 6, y + h - 1);
+      c.lineTo(tx + 6, y + h - 1);
+      c.lineTo(tx, y + h + 8);
       c.closePath();
       c.fill();
     }
     // Header: who + what they are doing.
     c.fillStyle = a.color;
     c.beginPath();
-    c.arc(bx + 12, by + 12, 3, 0, Math.PI * 2);
+    c.arc(x + 12, y + 12, 3, 0, Math.PI * 2);
     c.fill();
     c.fillStyle = palette[2]!;
     c.font = "700 9px IBM Plex Mono, monospace";
     c.textAlign = "left";
-    const T = this.t.tag;
-    const tag = { say: "", think: a.phase === "waiting" ? T.wait : T.think, stream: T.write, ok: T.ok, err: T.err, warn: a.phase === "approval" ? T.approval : "" }[b.kind];
-    c.fillText(`${head.toUpperCase()}${tag}`, bx + 19, by + 15);
+    c.fillText(head, x + 19, y + 15);
     c.fillStyle = palette[1]!;
     c.font = "500 11.5px IBM Plex Sans, system-ui, sans-serif";
-    lines.forEach((l, i) => c.fillText(l, bx + 10, by + 32 + i * 15));
-    if (b.kind === "think" && a.phase === "thinking") {
+    lines.forEach((l, i) => c.fillText(l, x + 10, y + 32 + i * 15));
+    if (b.kind === "think" && a.phase === "thinking" && !cut) {
       const n = Math.floor(this.now / 350) % 4;
-      c.fillText(".".repeat(n), bx + 10 + c.measureText(lines[lines.length - 1] ?? "").width, by + 32 + (lines.length - 1) * 15);
+      c.fillText(".".repeat(n), x + 10 + c.measureText(lines[lines.length - 1] ?? "").width, y + 32 + (lines.length - 1) * 15);
     }
     c.restore();
   }
