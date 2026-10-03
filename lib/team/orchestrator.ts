@@ -42,10 +42,16 @@ export type Emit = (e: TeamEvent) => void;
 
 /** Handoffs are staggered slightly so each one is readable (and walkable on the Floor). */
 const STAGGER_MS = 350;
-const PLAN_DEADLINE_MS = 20_000;
-/** Workers still talking at this point are cut so the lead has time to merge inside the 60s window. */
-const WORKER_DEADLINE_MS = 38_000;
-const RUN_DEADLINE_MS = 57_000;
+
+/** Time budget for one run, in ms from its start: planning, then the workers, then the whole run. */
+export type Pace = { plan: number; workers: number; run: number };
+/** Hosted engines inside a 60s serverless window: workers still talking at 38s are cut so the lead can merge. */
+export const HOSTED_PACE: Pace = { plan: 20_000, workers: 38_000, run: 57_000 };
+/**
+ * A model on the operator's own machine reads the kernel on a CPU or small GPU and usually serves one
+ * call at a time, so the lanes queue. No serverless clock applies there; give it minutes, not seconds.
+ */
+export const LOCAL_PACE: Pace = { plan: 180_000, workers: 600_000, run: 780_000 };
 const MAX_STEPS = 4;
 const WORKER_MAX_TOKENS = 1400;
 const OUTPUT_CAP = 6000;
@@ -56,14 +62,14 @@ function persona(id: PersonaId) {
   return BY_ID.get(id) ?? PERSONAS[0]!;
 }
 
-export async function orchestrate(input: TeamInput, open: Opener, emit: Emit, signal: AbortSignal, demo: boolean) {
+export async function orchestrate(input: TeamInput, open: Opener, emit: Emit, signal: AbortSignal, demo: boolean, pace: Pace = HOSTED_PACE) {
   const t0 = Date.now();
   const lang = replyLanguage(input);
   const leadKernel = kernelFor(LEAD, input);
   emit({ type: "meta", demo, lead: LEAD, bots: input.bots, kernelChars: leadKernel.chars });
 
   /* a. Plan ------------------------------------------------------------ */
-  const planWindow = deadline(signal, PLAN_DEADLINE_MS);
+  const planWindow = deadline(signal, pace.plan);
   let raw = "";
   let planModel = "";
   try {
@@ -98,7 +104,7 @@ export async function orchestrate(input: TeamInput, open: Opener, emit: Emit, si
 
   /* b. Parallel work --------------------------------------------------- */
   const outputs = new Map<PersonaId, Output>();
-  const workWindow = deadline(signal, WORKER_DEADLINE_MS - (Date.now() - t0));
+  const workWindow = deadline(signal, pace.workers - (Date.now() - t0));
   let pending = steps.length;
   const waitTimer = setTimeout(
     () => {
@@ -166,7 +172,7 @@ export async function orchestrate(input: TeamInput, open: Opener, emit: Emit, si
 
   const sensitive = needsApproval(input.job, steps);
   emit({ type: "final-start" });
-  const finalWindow = deadline(signal, RUN_DEADLINE_MS - (Date.now() - t0));
+  const finalWindow = deadline(signal, pace.run - (Date.now() - t0));
   const started = Date.now();
   let final = "";
   let finalOk = false;

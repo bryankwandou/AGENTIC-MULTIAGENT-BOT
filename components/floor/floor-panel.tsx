@@ -171,7 +171,7 @@ export function FloorPanel({ summary }: { summary: EngineSummary }) {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <span className="text-[12.5px] font-medium text-fg">{a.bot}</span>
-                          <span className="truncate font-mono text-[9.5px] text-subtle">{a.role}</span>
+                          <span className="truncate font-mono text-[9.5px] text-subtle">{idUi ? PERSONA_BY_ID[a.id].nameId : PERSONA_BY_ID[a.id].name}</span>
                           {persona.id === a.id && mode === "solo" ? <span className="ml-auto shrink-0 font-mono text-[9px] text-signal uppercase">{idUi ? "job berikut" : "next job"}</span> : null}
                           {mode === "team" && (a.id === LEAD || roster.includes(a.id)) ? <span className="ml-auto shrink-0 font-mono text-[9px] text-signal uppercase">{a.id === LEAD ? "lead" : idUi ? "tim" : "team"}</span> : null}
                         </div>
@@ -258,6 +258,7 @@ export function FloorPanel({ summary }: { summary: EngineSummary }) {
               selected={drawer === "bot" ? focusBot : null}
               pinned={pinned}
               onPinChange={setPinned}
+              lang={idUi ? "id" : "en"}
             />
             <div className="absolute top-3 left-3 z-10 flex items-center gap-1 rounded-xl border border-line bg-surface/80 p-1 backdrop-blur">
               <button

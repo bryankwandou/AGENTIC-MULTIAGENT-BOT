@@ -3,7 +3,7 @@ import { clientKey, rateLimit } from "@/lib/server/rate-limit";
 import { requestEngine } from "@/lib/server/engine";
 import { demoOpener } from "@/lib/team/demo";
 import { engineOpener } from "@/lib/team/engine-opener";
-import { orchestrate, type TeamInput } from "@/lib/team/orchestrator";
+import { HOSTED_PACE, LOCAL_PACE, orchestrate, type TeamInput } from "@/lib/team/orchestrator";
 import { LEAD, MEMORY_MAX_CHARS, MEMORY_MAX_NOTES, type TeamEvent } from "@/lib/team/types";
 
 export const runtime = "nodejs";
@@ -101,7 +101,8 @@ export async function POST(request: Request) {
         }
       };
       try {
-        await orchestrate(input, open, emit, stop.signal, !engine);
+        // A local runtime is only proxied where it runs next to this server — no serverless clock there.
+        await orchestrate(input, open, emit, stop.signal, !engine, engine?.local ? LOCAL_PACE : HOSTED_PACE);
       } catch (err) {
         if (!stop.signal.aborted) {
           emit({ type: "error", bot: LEAD, message: err instanceof Error ? err.message : "Team run failed." });

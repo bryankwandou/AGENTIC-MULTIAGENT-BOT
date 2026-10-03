@@ -133,7 +133,7 @@ export async function openEngineStream(engine: Engine, opts: OpenOpts): Promise<
       headers: engine.provider === "openrouter" ? { "X-Title": "AXIOM Operator Station" } : undefined,
     },
     opts,
-    engine.local ? 120_000 : 30_000,
+    engine.local ? 300_000 : 30_000,
   );
 }
 

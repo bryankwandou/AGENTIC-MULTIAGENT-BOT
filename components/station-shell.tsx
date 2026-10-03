@@ -22,6 +22,7 @@ import { getEngineStatus, type EngineStatus } from "@/lib/engine-status";
 import { compileKernel, megapromptStats } from "@/lib/megaprompt";
 import { PERSONAS, type ViewId } from "@/lib/catalog";
 import { cn } from "@/lib/cn";
+import { setFloorLanguage } from "@/lib/floor-bus";
 import { useStation } from "@/lib/store";
 import { ChatPanel } from "./chat-panel";
 import { CommandPalette } from "./command-palette";
@@ -71,6 +72,8 @@ export function StationShell() {
   const [railOpen, setRailOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [booted, setBooted] = useState(false);
+
+  useEffect(() => setFloorLanguage(language), [language]);
 
   useEffect(() => {
     void Promise.resolve(useStation.persist.rehydrate()).then(() => setHydrated(true));

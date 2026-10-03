@@ -42,8 +42,8 @@ export function browserTarget(e: EngineSettings): CompatTarget | null {
 export async function openInBrowser(e: EngineSettings, opts: OpenOpts): Promise<Opened> {
   const t = browserTarget(e);
   if (!t) throw new Error("That base URL is not valid.");
-  // Local models can take a while to load into memory on the first call.
-  return openCompat(t, opts, 120_000);
+  // Local models load into memory on the first call, then read the whole kernel before the first byte.
+  return openCompat(t, opts, 300_000);
 }
 
 export async function modelsInBrowser(e: EngineSettings, signal?: AbortSignal): Promise<string[]> {

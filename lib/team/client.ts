@@ -4,7 +4,7 @@ import { PERSONAS, type PersonaId } from "@/lib/catalog";
 import { emitFloor } from "@/lib/floor-bus";
 import { openInBrowser, transportOf } from "@/lib/engine/client";
 import { engineHeaders, useStation } from "@/lib/store";
-import { orchestrate, type Opener, type TeamInput } from "./orchestrator";
+import { LOCAL_PACE, orchestrate, type Opener, type TeamInput } from "./orchestrator";
 import { hydrateTeam, useTeam, type TeamLane, type TeamRun } from "./store";
 import {
   LEAD,
@@ -235,7 +235,7 @@ export async function runTeam(
           ...r,
           wait: { reason: e.reason, pending: e.pending ?? 0, at: Date.now() },
         }));
-        emitFloor({ type: "wait", persona: LEAD, reason: e.reason });
+        emitFloor({ type: "wait", persona: LEAD, reason: e.reason, pending: e.pending });
         break;
       case "final-start":
         finalAcc = "";
@@ -320,7 +320,7 @@ export async function runTeam(
           signal: req.signal,
         });
       try {
-        await orchestrate(input, open, handle, ctrl.signal, false);
+        await orchestrate(input, open, handle, ctrl.signal, false, LOCAL_PACE);
       } catch (err) {
         if (!ctrl.signal.aborted) {
           handle({

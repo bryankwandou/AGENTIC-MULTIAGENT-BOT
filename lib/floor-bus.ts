@@ -2,6 +2,13 @@ import { PERSONAS, type PersonaId } from "./catalog";
 
 const who = (id: PersonaId) => PERSONAS.find((p) => p.id === id)?.bot ?? id;
 
+/** Ship-log lines follow the station's UI language at the moment they are written (the shell keeps it in sync). */
+let indonesian = false;
+export function setFloorLanguage(language: string) {
+  indonesian = language !== "en";
+}
+const idUi = () => indonesian;
+
 /** What happens on the station, as the Floor animation and its ship-log see it. */
 export type FloorEvent =
   /** A bot received work. It walks to the meeting room to think until its first token. */
@@ -13,8 +20,8 @@ export type FloorEvent =
   | { type: "stopped"; persona: PersonaId }
   /** Bot hands work to a teammate — it walks over to their desk. */
   | { type: "handoff"; from: PersonaId; to: PersonaId; text: string }
-  /** Bot is blocked on background work (teammates, a slow engine) — it goes for coffee. */
-  | { type: "wait"; persona: PersonaId; reason: string }
+  /** Bot is blocked on background work (teammates, a slow engine) — it goes for coffee. `pending` = teammates still working. */
+  | { type: "wait"; persona: PersonaId; reason: string; pending?: number }
   /** Bot needs the operator's approval for a sensitive action. */
   | { type: "approval"; persona: PersonaId; action: string }
   | { type: "approved"; persona: PersonaId; action: string; ok: boolean }
@@ -37,40 +44,56 @@ function push(tag: string, text: string, tone?: LogEntry["tone"]) {
 }
 
 export function emitFloor(e: FloorEvent) {
+  const id = idUi();
   switch (e.type) {
-    case "job":
+    case "job": {
       floorStats.jobs += 1;
-      push("Job", `${who(e.persona)} took "${e.text.replace(/\s+/g, " ").slice(0, 64)}"`);
+      const job = e.text.replace(/\s+/g, " ").slice(0, 64);
+      push("Job", id ? `${who(e.persona)} menerima "${job}"` : `${who(e.persona)} took "${job}"`);
       break;
+    }
     case "compiled":
-      push("Kernel", `compiled ${e.chars.toLocaleString()}c for ${who(e.persona)}${e.model ? ` → ${e.model}` : ""}`, "signal");
+      push(
+        "Kernel",
+        `${id ? "kompilasi" : "compiled"} ${e.chars.toLocaleString()}c ${id ? "untuk" : "for"} ${who(e.persona)}${e.model ? ` → ${e.model}` : ""}`,
+        "signal",
+      );
       break;
-    case "done":
+    case "done": {
       floorStats.chars += e.chars;
       floorStats.lastMs = e.ms;
       floorStats.lastModel = e.model ?? "";
-      push("Ship", `${who(e.persona)} shipped ${e.chars.toLocaleString()} chars in ${(e.ms / 1000).toFixed(1)}s`, "signal");
+      const n = e.chars.toLocaleString();
+      const s = (e.ms / 1000).toFixed(1);
+      push(id ? "Kirim" : "Ship", id ? `${who(e.persona)} mengirim ${n} karakter dalam ${s} dtk` : `${who(e.persona)} shipped ${n} chars in ${s}s`, "signal");
       break;
+    }
     case "error":
-      push("Error", `${who(e.persona)}: ${e.message.slice(0, 90)}`, "danger");
+      push(id ? "Galat" : "Error", `${who(e.persona)}: ${e.message.slice(0, 90)}`, "danger");
       break;
     case "stopped":
-      push("Stop", `${who(e.persona)} was told to stop`, "warn");
+      push("Stop", id ? `${who(e.persona)} diminta berhenti` : `${who(e.persona)} was told to stop`, "warn");
       break;
     case "handoff":
-      push("Handoff", `${who(e.from)} → ${who(e.to)}: ${e.text.replace(/\s+/g, " ").slice(0, 60)}`);
+      push(id ? "Serah" : "Handoff", `${who(e.from)} → ${who(e.to)}: ${e.text.replace(/\s+/g, " ").slice(0, 60)}`);
       break;
-    case "wait":
-      push("Wait", `${who(e.persona)} waiting — ${e.reason}`);
+    case "wait": {
+      const reason = e.pending !== undefined ? (id ? `menunggu ${e.pending} rekan` : `waiting on ${e.pending} teammate${e.pending === 1 ? "" : "s"}`) : e.reason;
+      push(id ? "Tunggu" : "Wait", id ? `${who(e.persona)} ${reason}` : `${who(e.persona)} ${e.pending !== undefined ? reason : `waiting — ${reason}`}`);
       break;
+    }
     case "approval":
-      push("Approval", `${who(e.persona)} needs approval: ${e.action.slice(0, 70)}`, "warn");
+      push(id ? "Persetujuan" : "Approval", id ? `${who(e.persona)} butuh persetujuan: ${e.action.slice(0, 70)}` : `${who(e.persona)} needs approval: ${e.action.slice(0, 70)}`, "warn");
       break;
     case "approved":
-      push("Approval", `${e.ok ? "approved" : "rejected"}: ${e.action.slice(0, 70)}`, e.ok ? "signal" : "danger");
+      push(
+        id ? "Persetujuan" : "Approval",
+        `${e.ok ? (id ? "disetujui" : "approved") : id ? "ditolak" : "rejected"}: ${e.action.slice(0, 70)}`,
+        e.ok ? "signal" : "danger",
+      );
       break;
     case "vault":
-      push("Vault", `note filed: "${e.text.slice(0, 56)}"`);
+      push("Vault", id ? `catatan disimpan: "${e.text.slice(0, 56)}"` : `note filed: "${e.text.slice(0, 56)}"`);
       break;
     case "ambient":
       push(e.tag, e.text);

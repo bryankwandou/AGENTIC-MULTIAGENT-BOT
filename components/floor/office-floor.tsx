@@ -5,6 +5,7 @@ import { Crosshair, Minus, Plus, Scan } from "lucide-react";
 import { PERSONAS, type PersonaId } from "@/lib/catalog";
 import { cn } from "@/lib/cn";
 import { onFloor } from "@/lib/floor-bus";
+import { roomName, type FloorLang } from "./i18n";
 import { FloorWorld, type FloorSnapshot } from "./world";
 
 type Props = {
@@ -24,6 +25,8 @@ type Props = {
   onPinChange?: (id: PersonaId | null) => void;
   /** Hint under the hover card. */
   pickHint?: string;
+  /** Language for bubbles, statuses, room names and controls. */
+  lang?: FloorLang;
 };
 
 const ROOM_CHIPS = [
@@ -57,7 +60,7 @@ function zoomCenter(w: FloorWorld, el: HTMLDivElement | null, f: number) {
   if (r) w.zoomAt(r.width / 2, r.height / 2, f);
 }
 
-export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, onLog, onPick, roomNav = false, selected = null, pinned = null, onPinChange, pickHint }: Props) {
+export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, onLog, onPick, roomNav = false, selected = null, pinned = null, onPinChange, pickHint, lang = "en" }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const world = useRef<FloorWorld | null>(null);
@@ -66,6 +69,9 @@ export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, o
   const pinRef = useRef<PersonaId | null>(pinned);
   const selRef = useRef<PersonaId | null>(selected);
   selRef.current = selected;
+  const langRef = useRef<FloorLang>(lang);
+  langRef.current = lang;
+  const id = lang === "id";
   const [hover, setHover] = useState<{ id: PersonaId; x: number; y: number } | null>(null);
   const [follow, setFollow] = useState(true);
   const drag = useRef<{ x: number; y: number; moved: number } | null>(null);
@@ -82,6 +88,7 @@ export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, o
     );
     w.onLog = (tag, text, tone) => cb.current.onLog?.(tag, text, tone);
     world.current = w;
+    w.setLang(langRef.current);
     w.selected = selRef.current;
     if (pinRef.current) w.pin(pinRef.current);
     const off = simulate ? () => {} : onFloor((e) => w.handle(e));
@@ -146,6 +153,10 @@ export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, o
   useEffect(() => {
     if (world.current) world.current.selected = selected;
   }, [selected]);
+
+  useEffect(() => {
+    world.current?.setLang(lang);
+  }, [lang]);
 
   useEffect(() => {
     pinRef.current = pinned;
@@ -225,18 +236,18 @@ export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, o
             setFollow(!follow);
           }}
           className={cn("flex h-7 items-center gap-1.5 rounded-lg px-2 font-mono text-[10px] uppercase", follow ? "bg-accent text-accent-fg" : "text-muted hover:text-fg")}
-          title="Camera follows the busy bots"
+          title={id ? "Kamera mengikuti bot yang sibuk" : "Camera follows the busy bots"}
         >
-          <Crosshair className="size-3.5" /> follow
+          <Crosshair className="size-3.5" /> {id ? "ikuti" : "follow"}
         </button>
-        <CamButton label="Zoom in" onClick={() => world.current && zoomCenter(world.current, wrap.current, 1.25)}>
+        <CamButton label={id ? "Perbesar" : "Zoom in"} onClick={() => world.current && zoomCenter(world.current, wrap.current, 1.25)}>
           <Plus className="size-3.5" />
         </CamButton>
-        <CamButton label="Zoom out" onClick={() => world.current && zoomCenter(world.current, wrap.current, 0.8)}>
+        <CamButton label={id ? "Perkecil" : "Zoom out"} onClick={() => world.current && zoomCenter(world.current, wrap.current, 0.8)}>
           <Minus className="size-3.5" />
         </CamButton>
         <CamButton
-          label="Overview"
+          label={id ? "Seluruh kantor" : "Overview"}
           onClick={() => {
             world.current?.resetCamera();
             if (world.current) world.current.follow = false;
@@ -262,7 +273,7 @@ export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, o
               }}
               className="h-7 shrink-0 rounded-lg px-2 font-mono text-[10px] text-muted uppercase hover:bg-elevated hover:text-fg"
             >
-              {r.name}
+              {roomName(r, lang)}
             </button>
           ))}
         </div>
@@ -274,7 +285,7 @@ export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, o
         >
           <p className="flex items-center gap-2 text-sm font-medium">
             <span className="size-2 rounded-full" style={{ background: hovered.color }} />
-            {hovered.bot} <span className="font-normal text-muted">· {hovered.name}</span>
+            {hovered.bot} <span className="font-normal text-muted">· {id ? hovered.nameId : hovered.name}</span>
           </p>
           <p className="mt-0.5 text-xs text-muted">{snap?.status ?? hovered.blurb}</p>
           {onPick ? <p className="mt-1 font-mono text-[10px] text-subtle">{pickHint ?? "click to assign the next job"}</p> : null}
