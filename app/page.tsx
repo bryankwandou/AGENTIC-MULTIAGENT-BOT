@@ -2,8 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Command, Cpu, Database, FileText, Layers, ScanEye, Sparkles } from "lucide-react";
 import { AxiomAvatar, AxiomGlyph, Lamp } from "@/components/axiom-mark";
+import { BotAvatar } from "@/components/bot-avatar";
 import { FloorShowcase } from "@/components/landing/floor-showcase";
 import { SpineShowcase } from "@/components/landing/spine-showcase";
+import { TeamShowcase } from "@/components/landing/team-showcase";
 import { CORE_MODULE_IDS, MODULES, PERSONAS, SLASH_COMMANDS } from "@/lib/catalog";
 import { GROUPS, PROVIDERS } from "@/lib/engine/providers";
 import { compileKernel, megapromptSpine, megapromptStats, parseSections } from "@/lib/megaprompt";
@@ -70,9 +72,10 @@ export default function Landing() {
           <nav className="hidden items-center gap-6 text-[13px] text-muted md:flex">
             <a href="#spine" className="hover:text-fg">Compiler</a>
             <a href="#mind" className="hover:text-fg">The mind</a>
-            <a href="#personas" className="hover:text-fg">Personas</a>
+            <a href="#personas" className="hover:text-fg">Bots</a>
             <a href="#station" className="hover:text-fg">Station</a>
             <a href="#floor" className="hover:text-fg">Floor</a>
+            <a href="#team" className="hover:text-fg">Team</a>
           </nav>
           <Link
             href="/station"
@@ -281,9 +284,9 @@ export default function Landing() {
 
       {/* PERSONAS */}
       <section id="personas" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-24 md:px-6">
-        <p className="eyebrow">03 — Personas</p>
+        <p className="eyebrow">03 — The bots</p>
         <h2 className="mt-4 max-w-3xl font-display text-4xl leading-[1.05] font-semibold tracking-tight md:text-5xl">
-          One constitution. Six ways to sit in the chair.
+          One constitution. <span className="text-muted">Six named teammates.</span>
         </h2>
         <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {PERSONAS.map((p, i) => (
@@ -292,8 +295,17 @@ export default function Landing() {
                 <span className="font-mono text-[10px] text-subtle">P{String(i + 1).padStart(2, "0")}</span>
                 <Lamp tone="signal" className="size-1.5 opacity-40 transition-opacity group-hover:opacity-100" />
               </div>
-              <p className="mt-6 font-display text-3xl font-semibold">{p.name}</p>
-              <p className="mt-2 text-sm text-muted">{p.blurb}</p>
+              <div className="mt-5 flex items-center gap-3.5">
+                <BotAvatar id={p.id} size={44} />
+                <div>
+                  <p className="font-display text-3xl leading-none font-semibold">{p.bot}</p>
+                  <p className="mt-1.5 font-mono text-[10px] tracking-[0.16em] uppercase" style={{ color: p.color }}>
+                    {p.name}
+                    {p.id === "operator" ? " · team lead" : ""}
+                  </p>
+                </div>
+              </div>
+              <p className="mt-4 text-sm text-muted">{p.blurb}</p>
               <div className="mt-5 flex flex-wrap gap-1">
                 {p.modules.map((m) => (
                   <span key={m} className="rounded-md bg-elevated px-1.5 py-0.5 font-mono text-[10px] text-muted">
@@ -336,7 +348,7 @@ export default function Landing() {
               { icon: Layers, t: "Live inspector", d: "Toggle modules, watch the spine and budget react, tune temperature." },
               { icon: FileText, t: "Megaprompt studio", d: "All sections, searchable, line-numbered, with an operator addendum." },
               { icon: Database, t: "Memory vault", d: "Facts that should stay true, injected after the kernel on every turn." },
-              { icon: Sparkles, t: "Any engine", d: "Paste an xAI, Groq, Gemini, OpenAI or Claude key; provider auto-detected. No key? Demo mode." },
+              { icon: Sparkles, t: "Any engine", d: "Paste a key (provider auto-detected) or point it at Ollama, LM Studio or any local runtime. Nothing set? Demo mode." },
             ].map((f) => (
               <div key={f.t} className="flex gap-4">
                 <f.icon className="mt-0.5 size-5 shrink-0 text-signal" strokeWidth={1.5} />
@@ -387,10 +399,34 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* TEAM */}
+      <section id="team" className="scroll-mt-20 border-t border-line">
+        <div className="mx-auto max-w-6xl px-4 py-24 md:px-6">
+          <div className="grid gap-8 md:grid-cols-[1.1fr_1fr] md:items-end">
+            <div>
+              <p className="eyebrow">06 — The team</p>
+              <h2 className="mt-4 font-display text-4xl leading-[1.05] font-semibold tracking-tight md:text-5xl">
+                One job. Four minds. <span className="text-muted">One deliverable.</span>
+              </h2>
+            </div>
+            <p className="text-base leading-relaxed text-muted text-pretty">
+              Atlas, the lead, plans the job and hands one part to each teammate. They work at the same time, each on its own
+              kernel and memory, while Atlas waits over coffee. Then Atlas merges the parts into one answer, and anything that
+              acts on the world (send, publish, pay, deploy) waits for your approval. Overlapping bars below are the parallelism.
+            </p>
+          </div>
+          <div className="mt-10">
+            <TeamShowcase />
+          </div>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="relative overflow-hidden border-t border-line">
         <Image src="/desk.jpg" alt="" fill sizes="100vw" className="object-cover opacity-35" />
         <div className="absolute inset-0 bg-gradient-to-b from-bg via-bg/60 to-bg" />
+        {/* The photo carries its own wordmark; shade the middle so it never sits behind the headline. */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_55%_60%_at_50%_45%,var(--color-bg)_35%,transparent_100%)]" />
         <div className="relative mx-auto flex max-w-3xl flex-col items-center px-4 py-32 text-center">
           <Lamp live className="size-2.5" />
           <h2 className="mt-8 font-display text-5xl leading-[1.02] font-semibold tracking-tight md:text-7xl">AXIOM waits for the job.</h2>

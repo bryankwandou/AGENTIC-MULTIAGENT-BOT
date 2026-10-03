@@ -151,8 +151,8 @@ function demoReply(q: string, kernel: CompiledKernel, id: boolean, persona: Pers
   const cmd = /^\/(\w+)/.exec(q.trim())?.[1]?.toLowerCase();
   const job = q.replace(/^\/\w+\s*/, "").replace(/\s+/g, " ").trim().slice(0, 140) || (id ? "(kosong)" : "(empty)");
   const footer = id
-    ? `\n\n---\n_Mode demo · kernel ${kernel.chars.toLocaleString()}c dari ${kernel.used.length} seksi · persona ${persona}. Hubungkan key apa pun (xAI, Groq, Gemini, OpenAI, Claude, …) lewat **Engine** di inspector agar engine menjawab langsung._`
-    : `\n\n---\n_Demo mode · kernel ${kernel.chars.toLocaleString()}c from ${kernel.used.length} sections · persona ${persona}. Connect any key (xAI, Groq, Gemini, OpenAI, Claude, …) under **Engine** in the inspector to go live._`;
+    ? `\n\n---\n_Mode demo · kernel ${kernel.chars.toLocaleString()}c dari ${kernel.used.length} seksi · persona ${persona}. Pakai key apa pun (xAI, Claude, Gemini, Groq, Hugging Face, …) atau model lokal (Ollama, LM Studio, …) lewat **Engine** agar engine menjawab langsung._`
+    : `\n\n---\n_Demo mode · kernel ${kernel.chars.toLocaleString()}c from ${kernel.used.length} sections · persona ${persona}. Use any key (xAI, Claude, Gemini, Groq, Hugging Face, …) or a local model (Ollama, LM Studio, …) under **Engine** to go live._`;
 
   const en: Record<string, string> = {
     decide: `**Call:** pick the option you can reverse cheaply, ship it, and set a date to re-check.\n\n| Option | Upside | Cost | Reversible |\n|---|---|---|---|\n| A — simplest path | ships today | ceiling later | yes |\n| B — durable path | scales | a week of plumbing | partly |\n\n**Sacrifice:** B's headroom, for now.\n**Kill-criterion:** if the simple path breaks twice in a month, migrate.\n\nJob read as: _${job}_`,
