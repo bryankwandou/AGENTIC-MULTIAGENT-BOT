@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, Copy, Cpu, Eye, EyeOff, ExternalLink, KeyRound, Laptop, RefreshCw, Search, Server, X } from "lucide-react";
 import { Lamp } from "@/components/axiom-mark";
 import { corsHint, isLocalSite, modelsInBrowser, openInBrowser, transportOf } from "@/lib/engine/client";
+import { serverProxiesLocal } from "@/lib/engine-status";
 import { GROUPS, PROVIDERS, detectProvider, getProvider, type ProviderId } from "@/lib/engine/providers";
 import type { EngineStatus } from "@/lib/engine-status";
 import { cn } from "@/lib/cn";
@@ -303,13 +304,13 @@ function EngineDialogBody(props: BodyProps) {
                       ? idUi
                         ? "Tab ini memanggil runtime di komputer Anda langsung. Izinkan situs ini di CORS:"
                         : "This tab calls the runtime on your machine directly. Allow this site in its CORS settings:"
-                      : isLocalSite()
+                      : serverProxiesLocal() ?? isLocalSite()
                         ? idUi
-                          ? "AXIOM berjalan lokal, jadi servernya yang memanggil runtime Anda — tanpa CORS."
-                          : "AXIOM is running locally, so its server calls your runtime — no CORS needed."
+                          ? "Server AXIOM ini yang memanggil runtime Anda — tanpa pengaturan CORS."
+                          : "This AXIOM server calls your runtime for you — no CORS setup needed."
                         : idUi
-                          ? "Server deployment yang memanggil. Hanya berfungsi jika runtime ada di mesin yang sama dan ALLOW_LOCAL_ENGINES=true."
-                          : "The deployment's server makes the call. Works only when the runtime sits next to it and ALLOW_LOCAL_ENGINES=true."}
+                          ? "Server ini tidak boleh menjangkau runtime lokal (set ALLOW_LOCAL_ENGINES=true bila runtime ada di mesin yang sama). Pakai “dari browser”."
+                          : "This server may not reach local runtimes (set ALLOW_LOCAL_ENGINES=true when the runtime sits next to it). Use “from browser”."}
                   </p>
                   {transport === "browser" && cors ? (
                     <div className="mt-2 flex items-start gap-2 rounded-xl border border-line bg-inset px-3 py-2.5">

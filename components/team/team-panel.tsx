@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { Lamp } from "@/components/axiom-mark";
+import { AvatarStack, BotAvatar, PERSONA_BY_ID, type Persona } from "@/components/bot-avatar";
 import { Markdown } from "@/components/markdown";
 import { PERSONAS, type PersonaId } from "@/lib/catalog";
 import { cn } from "@/lib/cn";
@@ -28,16 +29,8 @@ import { abortTeam, decideApproval, runRoutine, runTeam, startRoutineClock } fro
 import { hydrateTeam, useTeam, type Routine, type RoutineEvery, type TeamLane, type TeamRun } from "@/lib/team/store";
 import { LEAD, MEMORY_MAX_CHARS, MEMORY_MAX_NOTES } from "@/lib/team/types";
 
-type Persona = (typeof PERSONAS)[number];
-const BY_ID = Object.fromEntries(PERSONAS.map((p) => [p.id, p])) as Record<PersonaId, Persona>;
+const BY_ID = PERSONA_BY_ID;
 const EVERY: RoutineEvery[] = [0, 15, 30, 60];
-
-/** Readable initial on a bot's signature color. */
-function ink(hex: string) {
-  const n = Number.parseInt(hex.replace("#", ""), 16);
-  const lum = (((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114) / 255;
-  return lum > 0.5 ? "#0a0b0c" : "#ecece8";
-}
 
 function role(p: Persona, idUi: boolean) {
   return idUi ? p.nameId : p.name;
@@ -309,30 +302,6 @@ export function TeamPanel() {
 /* ------------------------------------------------------------------ */
 /* Roster and memory                                                    */
 /* ------------------------------------------------------------------ */
-
-function BotAvatar({ id, size = 28, live = false, className }: { id: PersonaId; size?: number; live?: boolean; className?: string }) {
-  const p = BY_ID[id];
-  return (
-    <span
-      aria-hidden
-      className={cn("relative inline-flex shrink-0 items-center justify-center rounded-full font-display leading-none font-semibold select-none", className)}
-      style={{ width: size, height: size, background: p.color, color: ink(p.color), fontSize: Math.round(size * 0.5) }}
-    >
-      {p.bot.charAt(0)}
-      {live ? <Lamp live className="absolute -right-0.5 -bottom-0.5 size-2 ring-2 ring-bg" /> : null}
-    </span>
-  );
-}
-
-function AvatarStack({ bots, size = 18 }: { bots: PersonaId[]; size?: number }) {
-  return (
-    <span className="flex shrink-0 -space-x-1.5">
-      {bots.map((b) => (
-        <BotAvatar key={b} id={b} size={size} className="ring-2 ring-surface" />
-      ))}
-    </span>
-  );
-}
 
 function Roster({
   idUi,

@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { openInBrowser, transportOf } from "./engine/client";
 import { emitFloor } from "./floor-bus";
+import type { PersonaId } from "./catalog";
 import { compileKernel } from "./megaprompt";
 import { engineHeaders, useStation, type MessageMeta } from "./store";
 
@@ -12,18 +13,29 @@ import { engineHeaders, useStation, type MessageMeta } from "./store";
  * Cloud engines and the demo go through /api/chat; local runtimes on a deployed site are called
  * straight from the browser with the same kernel the server would compile.
  */
-type SenderState = { busy: boolean; phase: "compile" | "stream"; error: string | null };
+type SenderState = { busy: boolean; phase: "compile" | "stream"; error: string | null; persona: PersonaId | null };
 
-let state: SenderState = { busy: false, phase: "compile", error: null };
+export type SendResult = { persona: PersonaId; outcome: "done" | "error" | "stopped"; chars: number; ms: number; error?: string };
+
+let state: SenderState = { busy: false, phase: "compile", error: null, persona: null };
 let controller: AbortController | null = null;
 const subs = new Set<() => void>();
+const endSubs = new Set<(r: SendResult) => void>();
+
+/** Called once per finished solo job (toasts, follow-up steps). */
+export function onSendEnd(fn: (r: SendResult) => void) {
+  endSubs.add(fn);
+  return () => {
+    endSubs.delete(fn);
+  };
+}
 
 function set(patch: Partial<SenderState>) {
   state = { ...state, ...patch };
   subs.forEach((fn) => fn());
 }
 
-const SERVER_STATE: SenderState = { busy: false, phase: "compile", error: null };
+const SERVER_STATE: SenderState = { busy: false, phase: "compile", error: null, persona: null };
 
 export function useSender(): SenderState {
   return useSyncExternalStore(
@@ -56,14 +68,14 @@ export async function sendJob(text: string) {
   if (!content || state.busy) return;
   const st = useStation.getState();
   const idUi = st.language !== "en";
-  set({ busy: true, phase: "compile", error: null });
+  const persona = st.sessions.find((s) => s.id === st.activeSessionId)?.persona ?? "operator";
+  set({ busy: true, phase: "compile", error: null, persona });
 
   st.appendMessage({ id: crypto.randomUUID(), role: "user", content, createdAt: Date.now() });
-  st.appendMessage({ id: crypto.randomUUID(), role: "assistant", content: "", createdAt: Date.now() });
+  st.appendMessage({ id: crypto.randomUUID(), role: "assistant", content: "", createdAt: Date.now(), meta: { persona } });
 
   const latest = useStation.getState();
   const sess = latest.sessions.find((s) => s.id === latest.activeSessionId);
-  const persona = sess?.persona ?? "operator";
   const history = (sess?.messages ?? [])
     .slice(0, -1)
     .filter((m) => m.content.length > 0 && !m.meta?.error)
@@ -73,7 +85,8 @@ export async function sendJob(text: string) {
   const ctrl = new AbortController();
   controller = ctrl;
   const started = performance.now();
-  const meta: MessageMeta = {};
+  const meta: MessageMeta = { persona };
+  let result: SendResult = { persona, outcome: "done", chars: 0, ms: 0 };
   let acc = "";
   let lastEmit = 0;
 
@@ -167,6 +180,7 @@ export async function sendJob(text: string) {
         meta,
       );
     emitFloor({ type: "done", persona, ms: meta.ms, model: meta.model, chars: acc.length });
+    result = { persona, outcome: "done", chars: acc.length, ms: meta.ms };
   } catch (err) {
     meta.ms = Math.round(performance.now() - started);
     if ((err as { name?: string }).name === "AbortError") {
@@ -174,15 +188,18 @@ export async function sendJob(text: string) {
         .getState()
         .patchLastAssistant(acc ? `${acc}\n\n_${idUi ? "(dihentikan)" : "(stopped)"}_` : idUi ? "_(dihentikan)_" : "_(stopped)_", meta);
       emitFloor({ type: "stopped", persona });
+      result = { persona, outcome: "stopped", chars: acc.length, ms: meta.ms };
     } else {
       const msg = err instanceof Error ? err.message : "Engine failed.";
       set({ error: msg });
       useStation.getState().patchLastAssistant(`⚠ ${msg}`, { ...meta, error: true });
       emitFloor({ type: "error", persona, message: msg });
+      result = { persona, outcome: "error", chars: acc.length, ms: meta.ms, error: msg };
     }
   } finally {
     controller = null;
     set({ busy: false });
+    endSubs.forEach((fn) => fn(result));
   }
 }
 

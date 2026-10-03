@@ -32,6 +32,7 @@ import { KernelDialog } from "./kernel-dialog";
 import { PlaybooksPanel } from "./playbooks-panel";
 import { StudioPanel } from "./studio-panel";
 import { TeamPanel } from "./team/team-panel";
+import { Toaster, WorkingPill } from "./toaster";
 import { startRoutineClock } from "@/lib/team/client";
 import { VaultPanel } from "./vault-panel";
 
@@ -277,6 +278,7 @@ export function StationShell() {
             </p>
           </div>
           <div className="flex items-center gap-0.5">
+            <WorkingPill />
             <div className="mr-1 hidden items-center rounded-lg bg-inset p-0.5 sm:flex">
               {(["auto", "id", "en"] as const).map((pin) => (
                 <button
@@ -344,6 +346,7 @@ export function StationShell() {
         </div>
       ) : null}
 
+      <Toaster />
       <CommandPalette onExport={exportSession} />
       <EngineDialog status={engine} />
       <KernelDialog kernel={kernel} />

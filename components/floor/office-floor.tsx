@@ -17,6 +17,13 @@ type Props = {
   onPick?: (id: PersonaId) => void;
   /** Show room chips for quick camera jumps. */
   roomNav?: boolean;
+  /** Bot drawn with a selection ring. */
+  selected?: PersonaId | null;
+  /** Bot the camera stays on (null releases it). Operator camera input releases it too, reported via onPinChange. */
+  pinned?: PersonaId | null;
+  onPinChange?: (id: PersonaId | null) => void;
+  /** Hint under the hover card. */
+  pickHint?: string;
 };
 
 const ROOM_CHIPS = [
@@ -50,12 +57,15 @@ function zoomCenter(w: FloorWorld, el: HTMLDivElement | null, f: number) {
   if (r) w.zoomAt(r.width / 2, r.height / 2, f);
 }
 
-export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, onLog, onPick, roomNav = false }: Props) {
+export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, onLog, onPick, roomNav = false, selected = null, pinned = null, onPinChange, pickHint }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const world = useRef<FloorWorld | null>(null);
-  const cb = useRef({ onSnapshot, onLog, onPick });
-  cb.current = { onSnapshot, onLog, onPick };
+  const cb = useRef({ onSnapshot, onLog, onPick, onPinChange });
+  cb.current = { onSnapshot, onLog, onPick, onPinChange };
+  const pinRef = useRef<PersonaId | null>(pinned);
+  const selRef = useRef<PersonaId | null>(selected);
+  selRef.current = selected;
   const [hover, setHover] = useState<{ id: PersonaId; x: number; y: number } | null>(null);
   const [follow, setFollow] = useState(true);
   const drag = useRef<{ x: number; y: number; moved: number } | null>(null);
@@ -72,6 +82,8 @@ export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, o
     );
     w.onLog = (tag, text, tone) => cb.current.onLog?.(tag, text, tone);
     world.current = w;
+    w.selected = selRef.current;
+    if (pinRef.current) w.pin(pinRef.current);
     const off = simulate ? () => {} : onFloor((e) => w.handle(e));
 
     let cssW = 0;
@@ -106,6 +118,11 @@ export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, o
     const snap = window.setInterval(() => {
       cb.current.onSnapshot?.(w.snapshot());
       setFollow(w.follow);
+      // Zoom / pan / room jumps release the pin inside the world; tell the owner.
+      if (pinRef.current && w.pinnedBot !== pinRef.current) {
+        pinRef.current = null;
+        cb.current.onPinChange?.(null);
+      }
     }, 400);
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -125,6 +142,23 @@ export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, o
       world.current = null;
     };
   }, [simulate, maxims]);
+
+  useEffect(() => {
+    if (world.current) world.current.selected = selected;
+  }, [selected]);
+
+  useEffect(() => {
+    pinRef.current = pinned;
+    const w = world.current;
+    if (!w || w.pinnedBot === pinned) return;
+    w.pin(pinned);
+    if (!pinned) w.follow = true;
+    setFollow(w.follow);
+  }, [pinned]);
+
+  useEffect(() => {
+    if (world.current) world.current.hovered = hover?.id ?? null;
+  }, [hover?.id]);
 
   const pick = (e: React.PointerEvent) => {
     const r = wrap.current?.getBoundingClientRect();
@@ -184,8 +218,10 @@ export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, o
           type="button"
           onClick={() => {
             if (!world.current) return;
-            if (follow) world.current.follow = false;
-            else world.current.resetCamera();
+            if (follow) {
+              world.current.pin(null);
+              world.current.follow = false;
+            } else world.current.resetCamera();
             setFollow(!follow);
           }}
           className={cn("flex h-7 items-center gap-1.5 rounded-lg px-2 font-mono text-[10px] uppercase", follow ? "bg-accent text-accent-fg" : "text-muted hover:text-fg")}
@@ -241,7 +277,7 @@ export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, o
             {hovered.bot} <span className="font-normal text-muted">· {hovered.name}</span>
           </p>
           <p className="mt-0.5 text-xs text-muted">{snap?.status ?? hovered.blurb}</p>
-          {onPick ? <p className="mt-1 font-mono text-[10px] text-subtle">click to assign the next job</p> : null}
+          {onPick ? <p className="mt-1 font-mono text-[10px] text-subtle">{pickHint ?? "click to assign the next job"}</p> : null}
         </div>
       ) : null}
     </div>

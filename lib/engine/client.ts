@@ -2,6 +2,7 @@
 
 import { openCompat, listCompatModels, type CompatTarget, type OpenOpts, type Opened } from "./compat";
 import { cleanBaseUrl, getProvider } from "./providers";
+import { serverProxiesLocal } from "@/lib/engine-status";
 import type { EngineSettings } from "@/lib/store";
 
 /**
@@ -15,11 +16,13 @@ export function isLocalSite() {
 
 export type Transport = "server" | "browser";
 
+/** Auto: the server proxies local runtimes when it says it can (no CORS setup); otherwise the tab calls them. */
 export function transportOf(e: EngineSettings): Transport {
   const p = getProvider(e.provider);
   if (!p?.local) return "server";
   if (e.transport === "server" || e.transport === "browser") return e.transport;
-  return isLocalSite() ? "server" : "browser";
+  const proxy = serverProxiesLocal();
+  return (proxy ?? isLocalSite()) ? "server" : "browser";
 }
 
 export function browserTarget(e: EngineSettings): CompatTarget | null {
