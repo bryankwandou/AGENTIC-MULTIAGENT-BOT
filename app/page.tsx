@@ -5,7 +5,7 @@ import { AxiomAvatar, AxiomGlyph, Lamp } from "@/components/axiom-mark";
 import { FloorShowcase } from "@/components/landing/floor-showcase";
 import { SpineShowcase } from "@/components/landing/spine-showcase";
 import { CORE_MODULE_IDS, MODULES, PERSONAS, SLASH_COMMANDS } from "@/lib/catalog";
-import { PROVIDERS } from "@/lib/engine/providers";
+import { GROUPS, PROVIDERS } from "@/lib/engine/providers";
 import { compileKernel, megapromptSpine, megapromptStats, parseSections } from "@/lib/megaprompt";
 
 export const dynamic = "force-static";
@@ -167,7 +167,7 @@ export default function Landing() {
             { icon: FileText, t: "Megaprompt", d: `${stats.lines.toLocaleString()} lines · ${stats.sections} sections · ID + EN.` },
             { icon: Layers, t: "Compiler", d: "Locked constitution + enabled modules + persona overlay + vault + addendum." },
             { icon: Cpu, t: "Kernel", d: `≈${(modes.core.chars / 1000).toFixed(0)}k chars in core mode. Viewable, copyable, auditable.` },
-            { icon: Sparkles, t: "Engine", d: "Any key — Grok, Groq, Gemini, OpenAI, Claude and more — streamed, with model fallback." },
+            { icon: Sparkles, t: "Engine", d: "Any key or local model — Grok, Claude, Gemini, Groq, Hugging Face, Ollama, LM Studio — streamed, with model fallback." },
           ].map((s, i) => (
             <div key={s.t} className="relative bg-bg p-6">
               <span className="font-mono text-[10px] text-subtle">0{i + 1}</span>
@@ -179,18 +179,33 @@ export default function Landing() {
           ))}
         </div>
 
-        <div className="mt-10 flex flex-col gap-4 rounded-2xl border border-line bg-surface/40 px-6 py-5 md:flex-row md:items-center">
-          <div className="shrink-0">
-            <p className="eyebrow">Model-agnostic</p>
-            <p className="mt-1 font-display text-2xl font-semibold">Bring any key.</p>
+        <div className="mt-10 rounded-2xl border border-line bg-surface/40 px-6 py-6">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="eyebrow">Model-agnostic</p>
+              <p className="mt-1 font-display text-2xl font-semibold">Bring any model — cloud or your own GPU.</p>
+            </div>
+            <p className="font-mono text-[11px] text-subtle">{PROVIDERS.length} engines · key prefix auto-detect · model fallback</p>
           </div>
-          <div className="flex flex-wrap gap-1.5 md:ml-auto md:justify-end">
-            {PROVIDERS.map((p) => (
-              <span key={p.id} className="rounded-full border border-line px-3 py-1 text-xs text-muted">
-                {p.name}
-              </span>
+          <div className="mt-5 grid gap-5 md:grid-cols-3">
+            {GROUPS.map((g) => (
+              <div key={g.id}>
+                <p className="font-mono text-[10px] tracking-[0.16em] text-subtle uppercase">{g.label}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {PROVIDERS.filter((p) => p.group === g.id && p.id !== "custom").map((p) => (
+                    <span
+                      key={p.id}
+                      className={`rounded-full border px-3 py-1 text-xs ${p.local ? "border-signal/30 text-fg" : "border-line text-muted"}`}
+                    >
+                      {p.name}
+                    </span>
+                  ))}
+                  {g.id === "local" ? (
+                    <span className="rounded-full border border-dashed border-line px-3 py-1 text-xs text-subtle">any OpenAI-compatible URL</span>
+                  ) : null}
+                </div>
+              </div>
             ))}
-            <span className="rounded-full border border-dashed border-line px-3 py-1 text-xs text-subtle">any OpenAI-compatible URL</span>
           </div>
         </div>
       </section>

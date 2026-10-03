@@ -8,7 +8,7 @@ import {
   type PersonaId,
   type ViewId,
 } from "./catalog";
-import type { ProviderId } from "./engine/providers";
+import { getProvider, type ProviderId } from "./engine/providers";
 
 export type ChatRole = "user" | "assistant";
 
@@ -41,6 +41,10 @@ export type EngineSettings = {
   provider: ProviderId | "server";
   key: string;
   model: string;
+  /** Local runtimes: where it listens (e.g. http://localhost:11434/v1). */
+  baseUrl?: string;
+  /** Local runtimes: proxied by this server, or called straight from the browser. "auto" picks by where the site runs. */
+  transport?: "auto" | "server" | "browser";
 };
 
 export type VaultNote = {
@@ -265,8 +269,15 @@ export const useStation = create<State>()(
 
 /** Headers that carry a browser-held key to this deployment's proxy. Empty when using the server engine. */
 export function engineHeaders(e: EngineSettings): Record<string, string> {
-  if (e.provider === "server" || !e.key) return {};
-  return { "x-axiom-provider": e.provider, "x-axiom-key": e.key, ...(e.model ? { "x-axiom-model": e.model } : {}) };
+  if (e.provider === "server") return {};
+  const local = Boolean(getProvider(e.provider)?.local);
+  if (!local && !e.key) return {};
+  return {
+    "x-axiom-provider": e.provider,
+    ...(e.key ? { "x-axiom-key": e.key } : {}),
+    ...(e.model ? { "x-axiom-model": e.model } : {}),
+    ...(local && e.baseUrl ? { "x-axiom-base": e.baseUrl } : {}),
+  };
 }
 
 export function activeSession() {

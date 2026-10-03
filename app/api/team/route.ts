@@ -2,7 +2,8 @@ import { MODULES, PERSONAS, type CompileMode, type LanguagePin, type PersonaId }
 import { clientKey, rateLimit } from "@/lib/server/rate-limit";
 import { requestEngine } from "@/lib/server/engine";
 import { demoOpener } from "@/lib/team/demo";
-import { engineOpener, orchestrate, type TeamInput } from "@/lib/team/orchestrator";
+import { engineOpener } from "@/lib/team/engine-opener";
+import { orchestrate, type TeamInput } from "@/lib/team/orchestrator";
 import { LEAD, MEMORY_MAX_CHARS, MEMORY_MAX_NOTES, type TeamEvent } from "@/lib/team/types";
 
 export const runtime = "nodejs";
