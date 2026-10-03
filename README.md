@@ -6,20 +6,25 @@ A team of named AI bots that runs on a 5,269-line constitution, works in paralle
 
 - **`/`**: presentation landing page. Thesis, live kernel compiler ("spine"), the bot's voice card and prime directives, personas, the workstation, and a self-running office floor.
 - **`/station`**: the workstation.
-  - **Floor**: an isometric office where the six bots (Atlas, Iris, Kai, Wren, Sol, Theo) work at their desks. Each bot's body follows its *real* response phase:
+  - **Floor**: an isometric campus where the six bots (Atlas, Iris, Kai, Wren, Sol, Theo) work in parallel. Rooms:
+    - **Back row:** data center (three rack rows, cooling units), server room (the kernel console), vault (round vault door, lockers, gold, safe, memory shelves), warehouse (pallet racking and a forklift robot), security (a live CCTV wall that shows where every bot is, and a Sentry robot that patrols).
+    - **Middle:** meeting room, boardroom with a kernel TV, open office (14 desks), the lead's office, a huddle room with a coffee corner, and a game room (ping-pong, arcades, TV with beanbags).
+    - **Front:** reception (turnstiles, concierge robot, entrance), canteen (kitchen line, fridge, vending machines, 8 tables), focus booths and the library.
+
+    Each bot's body follows its *real* response phase:
 
     | Bot phase | On the floor |
     |---|---|
-    | job received, model thinking | walks to the meeting room and thinks |
-    | still no tokens (background wait) | goes for coffee |
+    | job received, model thinking | walks to the nearest meeting room / huddle table and thinks |
+    | still no tokens (background wait) | goes for coffee at the nearest coffee point |
     | tokens streaming | back at the desk typing; the reply streams in a bubble |
     | done | leans back, "shipped" |
-    | error | inspects the racks in the kernel room |
+    | error | inspects the racks in the server room / data center |
     | handoff | walks to a teammate's desk |
     | needs approval | stands with a hand raised |
-    | vault save | files the note at the shelves |
+    | vault save | files the note in the vault |
 
-    Idle bots keep an ambient routine. The camera follows whoever is busy (scroll to zoom, drag to pan, double-click to reset). The left panel shows live counts, honest work bars and the ship-log.
+    Idle bots keep an ambient routine: eating in the canteen, ping-pong in pairs, arcades, fetching boxes from the warehouse, calls in the booths, reading, chatting with security. Bots on a job walk briskly. The camera follows whoever is busy (scroll to zoom, drag to pan, double-click to reset, or use the room chips to jump). The left panel shows live counts, honest work bars and the ship-log.
   - **Team**: multi-bot runs. The lead plans, teammates work in parallel, there are handoffs and synthesis, plus approval for sensitive actions, per-bot memory and routines.
   - **Chat** with any bot, **kernel inspector** (lite / core / full, module toggles, spine), **kernel viewer**, **megaprompt studio**, **memory vault**, **playbooks**, **⌘K palette**.
 - **Any engine**: xAI, Groq, Gemini, OpenAI, Anthropic, OpenRouter, DeepSeek, Mistral, Cerebras, or any OpenAI-compatible URL. Paste a key in the station (the provider is detected from its prefix) or set one on the server. With no key at all, the station runs in **demo mode**. In demo mode `/research` deliberately thinks long, to show the coffee wait.

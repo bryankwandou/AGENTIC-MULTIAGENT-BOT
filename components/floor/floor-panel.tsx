@@ -142,7 +142,7 @@ export function FloorPanel({ summary }: { summary: EngineSummary }) {
       </aside>
 
       <div className="order-1 flex min-h-0 min-w-0 flex-1 flex-col lg:order-2">
-        <OfficeFloor className="min-h-[300px] flex-1 bg-bg" onSnapshot={setSnap} onPick={(id) => setPersona(id)} />
+        <OfficeFloor className="min-h-[300px] flex-1 bg-bg" roomNav onSnapshot={setSnap} onPick={(id) => setPersona(id)} />
 
         <div className="border-t border-line bg-surface/50 px-3 py-3 md:px-5">
           {last?.content ? (

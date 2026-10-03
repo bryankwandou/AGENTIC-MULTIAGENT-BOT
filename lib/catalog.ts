@@ -6,7 +6,7 @@ export type PersonaId =
   | "strategist"
   | "tutor";
 
-export type ViewId = "chat" | "floor" | "studio" | "vault" | "playbooks";
+export type ViewId = "chat" | "floor" | "team" | "studio" | "vault" | "playbooks";
 
 export type CompileMode = "lite" | "core" | "full";
 
