@@ -1,7 +1,6 @@
-import "server-only";
 import { PERSONAS, type CompileMode, type LanguagePin, type PersonaId } from "@/lib/catalog";
 import { compileKernel, type CompiledKernel } from "@/lib/megaprompt";
-import { EngineError, openEngineStream, type Engine } from "@/lib/server/engine";
+import { EngineError } from "@/lib/engine/compat";
 import { LEAD, type TeamEvent, type TeamStep } from "./types";
 
 /**
@@ -55,17 +54,6 @@ const BY_ID = new Map(PERSONAS.map((p) => [p.id, p]));
 
 function persona(id: PersonaId) {
   return BY_ID.get(id) ?? PERSONAS[0]!;
-}
-
-export function engineOpener(engine: Engine): Opener {
-  return (req) =>
-    openEngineStream(engine, {
-      system: req.system.slice(0, 100_000),
-      messages: [{ role: "user", content: req.user }],
-      temperature: req.temperature,
-      maxTokens: req.maxTokens,
-      signal: req.signal,
-    });
 }
 
 export async function orchestrate(input: TeamInput, open: Opener, emit: Emit, signal: AbortSignal, demo: boolean) {

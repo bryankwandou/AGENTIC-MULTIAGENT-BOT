@@ -1,12 +1,16 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { openInBrowser, transportOf } from "./engine/client";
 import { emitFloor } from "./floor-bus";
+import { compileKernel } from "./megaprompt";
 import { engineHeaders, useStation, type MessageMeta } from "./store";
 
 /**
  * One chat pipeline shared by every view (Chat, Floor). Module-level so a reply keeps
  * streaming — and the Floor keeps animating it — when the operator switches views mid-turn.
+ * Cloud engines and the demo go through /api/chat; local runtimes on a deployed site are called
+ * straight from the browser with the same kernel the server would compile.
  */
 type SenderState = { busy: boolean; phase: "compile" | "stream"; error: string | null };
 
@@ -32,6 +36,10 @@ export function useSender(): SenderState {
   );
 }
 
+export function isSending() {
+  return state.busy;
+}
+
 export function abortSend() {
   controller?.abort();
 }
@@ -40,6 +48,9 @@ export function clearSendError() {
   set({ error: null });
 }
 
+const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, Number.isFinite(n) ? n : min));
+
+/** Sends a job to the active session's bot. Resolves when the reply is finished (or failed). */
 export async function sendJob(text: string) {
   const content = text.trim();
   if (!content || state.busy) return;
@@ -66,62 +77,85 @@ export async function sendJob(text: string) {
   let acc = "";
   let lastEmit = 0;
 
+  const onMeta = (model?: string, kernelChars?: number) => {
+    meta.model = model;
+    meta.kernelChars = kernelChars;
+    emitFloor({ type: "compiled", persona, chars: kernelChars ?? 0, model });
+  };
+  const onToken = (token: string) => {
+    if (!acc) set({ phase: "stream" });
+    acc += token;
+    useStation.getState().patchLastAssistant(acc);
+    const now = performance.now();
+    if (now - lastEmit > 90) {
+      lastEmit = now;
+      emitFloor({ type: "token", persona, text: acc });
+    }
+  };
+
   try {
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...engineHeaders(latest.engine) },
-      signal: ctrl.signal,
-      body: JSON.stringify({
-        messages: history,
+    if (transportOf(latest.engine) === "browser") {
+      const kernel = compileKernel({
+        mode: latest.compileMode,
+        enabledIds: latest.enabledModules,
         persona,
         language: latest.language,
-        compileMode: latest.compileMode,
-        enabledModules: latest.enabledModules,
-        vault: latest.vault.map((v) => v.text),
-        addendum: latest.addendum,
-        temperature: latest.temperature,
-        maxTokens: latest.maxTokens,
-      }),
-    });
-    if (!res.ok || !res.body) {
-      const j = (await res.json().catch(() => null)) as { error?: string } | null;
-      throw new Error(j?.error ?? `HTTP ${res.status}`);
-    }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buf = "";
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const parts = buf.split("\n");
-      buf = parts.pop() ?? "";
-      for (const line of parts) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data:")) continue;
-        const data = trimmed.slice(5).trim();
-        if (!data) continue;
-        let json: { token?: string; error?: string; meta?: { model?: string; kernelChars?: number } };
-        try {
-          json = JSON.parse(data);
-        } catch {
-          continue;
-        }
-        if (json.error) throw new Error(json.error);
-        if (json.meta) {
-          meta.model = json.meta.model;
-          meta.kernelChars = json.meta.kernelChars;
-          emitFloor({ type: "compiled", persona, chars: json.meta.kernelChars ?? 0, model: json.meta.model });
-        }
-        if (json.token) {
-          if (!acc) set({ phase: "stream" });
-          acc += json.token;
-          useStation.getState().patchLastAssistant(acc);
-          const now = performance.now();
-          if (now - lastEmit > 90) {
-            lastEmit = now;
-            emitFloor({ type: "token", persona, text: acc });
+        vault: latest.vault.slice(0, 40).map((v) => v.text.slice(0, 500)),
+        addendum: latest.addendum.slice(0, 4000),
+      });
+      const { model, tokens } = await openInBrowser(latest.engine, {
+        system: kernel.text.slice(0, 100_000),
+        messages: history.slice(-16).map((m) => ({ role: m.role, content: m.content.slice(0, 12_000) })),
+        temperature: clamp(latest.temperature, 0, 1.2),
+        maxTokens: Math.round(clamp(latest.maxTokens, 256, 4096)),
+        signal: ctrl.signal,
+      });
+      onMeta(model, kernel.chars);
+      for await (const t of tokens) onToken(t);
+    } else {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...engineHeaders(latest.engine) },
+        signal: ctrl.signal,
+        body: JSON.stringify({
+          messages: history,
+          persona,
+          language: latest.language,
+          compileMode: latest.compileMode,
+          enabledModules: latest.enabledModules,
+          vault: latest.vault.map((v) => v.text),
+          addendum: latest.addendum,
+          temperature: latest.temperature,
+          maxTokens: latest.maxTokens,
+        }),
+      });
+      if (!res.ok || !res.body) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(j?.error ?? `HTTP ${res.status}`);
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split("\n");
+        buf = parts.pop() ?? "";
+        for (const line of parts) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data:")) continue;
+          const data = trimmed.slice(5).trim();
+          if (!data) continue;
+          let json: { token?: string; error?: string; meta?: { model?: string; kernelChars?: number } };
+          try {
+            json = JSON.parse(data);
+          } catch {
+            continue;
           }
+          if (json.error) throw new Error(json.error);
+          if (json.meta) onMeta(json.meta.model, json.meta.kernelChars);
+          if (json.token) onToken(json.token);
         }
       }
     }

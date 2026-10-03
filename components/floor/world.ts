@@ -176,6 +176,8 @@ export type AgentSnapshot = {
   phase: Phase;
   where: string;
   progress: number;
+  /** ms in the current phase (0 when idle). */
+  since: number;
 };
 
 export type FloorSnapshot = {
@@ -185,6 +187,8 @@ export type FloorSnapshot = {
 
 /** How long a bot thinks in the meeting room before treating the wait as background work (coffee). */
 const THINK_PATIENCE = 4000;
+/** People are drawn slightly larger than furniture scale so they read at a glance. */
+const CHAR = 1.14;
 
 const FACE_VEC: Record<Face, [number, number]> = {
   E: [0.894, 0.447],
@@ -356,6 +360,11 @@ export class FloorWorld {
   private cam = { z: 1, x: (GW - GH) * HW * 0.5, y: ((GW + GH) * HH - WALL_H) * 0.5 };
   private user = { z: 1, x: (GW - GH) * HW * 0.5, y: ((GW + GH) * HH - WALL_H) * 0.5 };
   follow = true;
+  /** Bot the operator picked (ring on the floor); the camera can pin to it. */
+  selected: PersonaId | null = null;
+  hovered: PersonaId | null = null;
+  private pinned: PersonaId | null = null;
+  private ol: { body: HTMLCanvasElement; sil: HTMLCanvasElement } | null = null;
   private focus: { ids: Set<PersonaId>; until: number } = { ids: new Set(), until: 0 };
   private dt = 0.016;
   private lastPersona: PersonaId = "operator";
@@ -1350,7 +1359,7 @@ export class FloorWorld {
       const elapsed = this.now - a.phaseAt;
       const progress =
         a.phase === "writing" ? Math.min(0.95, 0.15 + a.stream.length / 1600) : a.phase === "thinking" ? Math.min(0.5, elapsed / 12000) : a.phase === "waiting" ? 0.45 : a.phase === "done" ? 1 : 0;
-      return { id: a.id, bot: a.bot, role: a.role, color: a.color, status, phase: a.phase, where, progress };
+      return { id: a.id, bot: a.bot, role: a.role, color: a.color, status, phase: a.phase, where, progress, since: a.phase === "idle" ? 0 : elapsed };
     });
     return { agents, counts };
   }
@@ -1361,6 +1370,7 @@ export class FloorWorld {
   }
 
   focusRoom(id: string) {
+    this.pinned = null;
     const r = ROOMS.find((x) => x.id === id);
     if (!r) return;
     const [cx, cy] = iso((r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2, 14);
@@ -1376,8 +1386,8 @@ export class FloorWorld {
     let best: { id: PersonaId; d: number } | null = null;
     for (const a of this.agents) {
       const [sx, sy] = iso(a.x, a.y);
-      if (wx > sx - 9 && wx < sx + 9 && wy > sy - 38 && wy < sy + 4) {
-        const d = Math.abs(wx - sx) + Math.abs(wy - (sy - 18));
+      if (wx > sx - 11 && wx < sx + 11 && wy > sy - 44 && wy < sy + 5) {
+        const d = Math.abs(wx - sx) + Math.abs(wy - (sy - 20));
         if (!best || d < best.d) best = { id: a.id, d };
       }
     }
@@ -1388,14 +1398,56 @@ export class FloorWorld {
   headAt(id: PersonaId): [number, number] | null {
     const a = this.agent(id);
     if (!a) return null;
-    const [sx, sy] = iso(a.x, a.y, 40);
+    const [sx, sy] = iso(a.x, a.y, 45);
     return [sx * this.view.s + this.view.ox, sy * this.view.s + this.view.oy];
   }
 
   /* -------------------------------------------------------------- render */
 
+  private drawRings(c: CanvasRenderingContext2D) {
+    for (const a of this.agents) {
+      const sel = a.id === this.selected;
+      const hov = a.id === this.hovered;
+      const busy = a.phase !== "idle" && a.phase !== "done";
+      if (!sel && !hov && !busy) continue;
+      const [sx, sy] = iso(a.x, a.y);
+      const pulse = 0.5 + Math.sin(this.now / 260) * 0.5;
+      c.save();
+      c.translate(sx, sy);
+      c.scale(1, 0.5);
+      if (busy) {
+        const g = c.createRadialGradient(0, 0, 4, 0, 0, 22);
+        g.addColorStop(0, rgba(a.color, 0.28 + pulse * 0.12));
+        g.addColorStop(1, rgba(a.color, 0));
+        c.fillStyle = g;
+        c.beginPath();
+        c.arc(0, 0, 22, 0, Math.PI * 2);
+        c.fill();
+      }
+      if (sel || hov) {
+        c.strokeStyle = rgba(a.color, sel ? 0.75 + pulse * 0.25 : 0.55);
+        c.lineWidth = sel ? 2.4 : 1.4;
+        c.beginPath();
+        c.arc(0, 0, 15 + (sel ? pulse * 2 : 0), 0, Math.PI * 2);
+        c.stroke();
+      }
+      c.restore();
+    }
+  }
+
+  /** Pin the camera to one bot (null to release). */
+  pin(id: PersonaId | null) {
+    this.pinned = id;
+    this.follow = id !== null || this.follow;
+  }
+
+  get pinnedBot() {
+    return this.pinned;
+  }
+
   /** Operator camera input (CSS px). */
   zoomAt(px: number, py: number, factor: number) {
+    this.pinned = null;
     const v = this.view;
     const wx = (px - v.ox) / v.s;
     const wy = (py - v.oy) / v.s;
@@ -1408,6 +1460,7 @@ export class FloorWorld {
   }
 
   panBy(dxPx: number, dyPx: number) {
+    this.pinned = null;
     if (this.follow) {
       this.user = { ...this.cam };
       this.follow = false;
@@ -1417,11 +1470,19 @@ export class FloorWorld {
   }
 
   resetCamera() {
+    this.pinned = null;
     this.user = { z: 1, x: (GW - GH) * HW * 0.5, y: ((GW + GH) * HH - WALL_H) * 0.5 };
     this.follow = true;
   }
 
   private cameraTarget(fit: number, w: number, h: number) {
+    if (this.pinned) {
+      const a = this.agent(this.pinned);
+      if (a) {
+        const [px, py] = iso(a.x, a.y, 24);
+        return { z: 2.3, x: px, y: py };
+      }
+    }
     if (!this.follow) return this.user;
     const active = this.agents.filter((a) => this.focus.ids.has(a.id) && (a.phase !== "idle" || this.now < this.focus.until));
     if (!active.length) {
@@ -1493,6 +1554,7 @@ export class FloorWorld {
 
     this.drawWallLive(ctx, hour);
     this.drawLightPools(ctx, hour);
+    this.drawRings(ctx);
 
     // Depth-sorted scene: furniture, partitions, empty chairs, bots, the robot vacuum.
     const dyn: Item[] = [];
@@ -1507,7 +1569,15 @@ export class FloorWorld {
       const pull = sp.chair === "stool" || sp.chair === "beanbag" ? 0 : sp.face === "S" ? -0.12 : 0.12;
       dyn.push({ x0: sp.x - 0.3, y0: sp.y + pull - 0.3, x1: sp.x + 0.3, y1: sp.y + pull + 0.3, h: 22, draw: (c) => this.drawChair(c, sp.x, sp.y + pull, sp.face, sp.chair ?? "#2c3036", "all") });
     }
-    for (const n of this.npcs) dyn.push({ x0: n.x - 0.25, y0: n.y - 0.25, x1: n.x + 0.25, y1: n.y + 0.25, h: 36, draw: (c) => this.drawNpc(c, n) });
+    for (const n of this.npcs)
+      dyn.push({
+        x0: n.x - 0.25,
+        y0: n.y - 0.25,
+        x1: n.x + 0.25,
+        y1: n.y + 0.25,
+        h: 36,
+        draw: (c) => (n.kind === "forklift" ? this.drawNpc(c, n) : this.drawOutlined(c, ...iso(n.x, n.y), (cc) => this.drawNpc(cc, n))),
+      });
     const r = this.roomba;
     dyn.push({ x0: r.x - 0.25, y0: r.y - 0.25, x1: r.x + 0.25, y1: r.y + 0.25, h: 4, draw: (c) => this.drawRoomba(c) });
     const ball = this.pongBall();
@@ -1517,8 +1587,12 @@ export class FloorWorld {
     this.drawGlow(ctx);
     this.drawParticles(ctx);
 
-    // Vignette + night grade in screen space.
+    // Night grade + vignette in screen space.
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (hour < 6.5 || hour >= 19) {
+      ctx.fillStyle = "rgba(12,20,48,0.16)";
+      ctx.fillRect(0, 0, w, h);
+    }
     const vg = ctx.createRadialGradient(w / 2, h * 0.45, Math.min(w, h) * 0.35, w / 2, h * 0.5, Math.max(w, h) * 0.75);
     vg.addColorStop(0, "rgba(0,0,0,0)");
     vg.addColorStop(1, "rgba(5,6,7,0.32)");
@@ -1678,6 +1752,24 @@ export class FloorWorld {
           planks(r, "#3b2f25");
           rug(38.6, 26.6, 43.2, 33.2, "#2f4a5c", "#36556a");
           break;
+      }
+    }
+
+    // Soft contact shadows under furniture (light from the back-left, so they fall forward).
+    for (const it of this.items) {
+      const w = it.x1 - it.x0;
+      const d = it.y1 - it.y0;
+      if (w < 0.25 || d < 0.25 || it.h < 5) continue;
+      const k = Math.min(0.5, 0.2 + it.h / 140);
+      for (let i = 0; i < 4; i++) {
+        const e = 0.04 + i * 0.08;
+        const ox = 0.1 + i * 0.05;
+        const oy = 0.07 + i * 0.035;
+        poly(
+          c,
+          [iso(it.x0 - e + ox, it.y0 - e + oy), iso(it.x1 + e + ox, it.y0 - e + oy), iso(it.x1 + e + ox, it.y1 + e + oy), iso(it.x0 - e + ox, it.y1 + e + oy)],
+          `rgba(0,0,0,${(k / 4).toFixed(3)})`,
+        );
       }
     }
 
@@ -2129,7 +2221,7 @@ export class FloorWorld {
     this.drawNpcTags(c);
     const order = [...this.agents].sort((p, q) => p.x + p.y - (q.x + q.y));
     for (const a of order) {
-      const [wx, wy] = iso(a.x, a.y, 40 - a.sit * 4.5);
+      const [wx, wy] = iso(a.x, a.y, (40 - a.sit * 4.5) * CHAR);
       const sx = wx * v.s + v.ox;
       const sy = wy * v.s + v.oy;
       if (a.bubble) this.drawBubble(c, a, sx, sy - 3);
@@ -2307,6 +2399,66 @@ export class FloorWorld {
   }
 
   private drawAgent(c: CanvasRenderingContext2D, a: Agent) {
+    const [sx, sy] = iso(a.x, a.y);
+    c.save();
+    c.translate(sx, sy);
+    c.scale(CHAR, CHAR);
+    c.fillStyle = "rgba(0,0,0,0.34)";
+    c.beginPath();
+    c.ellipse(0, 0, 7.5, 3.4, 0, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
+    this.drawOutlined(c, sx, sy, (cc) => this.drawAgentBody(cc, a));
+  }
+
+  /** Renders a figure off-screen, then stamps a dark silhouette around it so it reads at any zoom. */
+  private drawOutlined(c: CanvasRenderingContext2D, sx: number, sy: number, draw: (cc: CanvasRenderingContext2D) => void) {
+    const { s, dpr } = this.view;
+    const k = s * dpr * CHAR;
+    const BW = 48;
+    const BH = 66;
+    const FOOT = 9;
+    const pw = Math.max(1, Math.ceil(BW * k));
+    const ph = Math.max(1, Math.ceil(BH * k));
+    if (!this.ol) this.ol = { body: document.createElement("canvas"), sil: document.createElement("canvas") };
+    const { body, sil } = this.ol;
+    if (body.width !== pw || body.height !== ph) {
+      body.width = sil.width = pw;
+      body.height = sil.height = ph;
+    }
+    const bc = body.getContext("2d")!;
+    bc.setTransform(1, 0, 0, 1, 0, 0);
+    bc.clearRect(0, 0, pw, ph);
+    bc.setTransform(k, 0, 0, k, (BW / 2 - sx) * k, (BH - FOOT - sy) * k);
+    draw(bc);
+    const sc = sil.getContext("2d")!;
+    sc.setTransform(1, 0, 0, 1, 0, 0);
+    sc.globalCompositeOperation = "source-over";
+    sc.clearRect(0, 0, pw, ph);
+    sc.drawImage(body, 0, 0);
+    sc.globalCompositeOperation = "source-in";
+    sc.fillStyle = "rgba(6,7,8,0.9)";
+    sc.fillRect(0, 0, pw, ph);
+    sc.globalCompositeOperation = "source-over";
+    c.save();
+    c.translate(sx, sy);
+    c.scale(CHAR, CHAR);
+    c.translate(-sx, -sy);
+    const x0 = sx - BW / 2;
+    const y0 = sy - (BH - FOOT);
+    const o = 0.6;
+    for (const [dx, dy] of [
+      [-o, 0],
+      [o, 0],
+      [0, -o],
+      [0, o],
+    ] as const)
+      c.drawImage(sil, 0, 0, pw, ph, x0 + dx, y0 + dy, BW, BH);
+    c.drawImage(body, 0, 0, pw, ph, x0, y0, BW, BH);
+    c.restore();
+  }
+
+  private drawAgentBody(c: CanvasRenderingContext2D, a: Agent) {
     const t = this.now / 1000;
     const [sx, sy] = iso(a.x, a.y);
     const [fx, fy] = FACE_VEC[a.face];
@@ -2322,12 +2474,6 @@ export class FloorWorld {
     const lean = a.act === "typing" ? 1.4 : a.act === "lean" ? -1.6 : 0;
     const topX = sx + fx * lean;
     const topY = shoulderY + fy * lean;
-
-    // Contact shadow.
-    c.fillStyle = "rgba(0,0,0,0.32)";
-    c.beginPath();
-    c.ellipse(sx, sy, 7.5, 3.4, 0, 0, Math.PI * 2);
-    c.fill();
 
     if (seatChair && front) this.drawChair(c, a.x, a.y, a.face, seatChair, "all");
     if (seatChair && !front) this.drawChair(c, a.x, a.y, a.face, seatChair, "seat");
