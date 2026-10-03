@@ -1,5 +1,5 @@
 import { megapromptStats } from "@/lib/megaprompt";
-import { describeEngine, serverEngine } from "@/lib/server/engine";
+import { describeEngine, localEnginesAllowed, serverEngine } from "@/lib/server/engine";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +12,8 @@ export function GET() {
       engine,
       models: engine?.models ?? [],
       byok: process.env.ALLOW_BYOK !== "false",
+      // Whether this server may proxy runtimes on the operator's machine (Ollama, LM Studio…).
+      localEngines: localEnginesAllowed() && process.env.ALLOW_BYOK !== "false",
       megaprompt: megapromptStats(),
       version: "1.2.0",
     },

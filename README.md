@@ -24,7 +24,14 @@ A team of named AI bots that runs on a 5,269-line constitution, works in paralle
     | needs approval | stands with a hand raised |
     | vault save | files the note in the vault |
 
-    Idle bots keep an ambient routine: eating in the canteen, ping-pong in pairs, arcades, fetching boxes from the warehouse, calls in the booths, reading, chatting with security. Bots on a job walk briskly. The camera follows whoever is busy (scroll to zoom, drag to pan, double-click to reset, or use the room chips to jump). The left panel shows live counts, honest work bars and the ship-log.
+    Idle bots keep an ambient routine: eating in the canteen, ping-pong in pairs, arcades, fetching boxes from the warehouse, calls in the booths, reading, chatting with security. Bots on a job walk briskly. The camera follows whoever is busy (scroll to zoom, drag to pan, double-click to reset, or use the room chips to jump). The left panel shows the crew (phase, elapsed time, honest progress), where everyone is, and the ship-log.
+
+    Workflow on the floor:
+    - **Solo / Team composer**: give one bot a job, or switch to Team, pick teammates, and Atlas plans while they work in parallel.
+    - **Live drawer**: the reply streams in as it is written. For a team run it shows the plan, every lane, the deliverable and the approval.
+    - **Bot profile**: click any bot (on the floor or in the crew list) for its status, skill modules, memory and recent work. From there you can assign it the next job, follow it with the camera, chat with it, or add it to the team.
+    - **Approvals**: a banner above the floor, a header pill and a toast on any other view, each with Approve / Reject.
+    - **▶ Showcase**: a guided tour. First a solo `/research` job (meeting room → coffee → desk), then a team run that ends with an approval.
   - **Team**: multi-bot runs. The lead plans, teammates work in parallel, there are handoffs and synthesis, plus approval for sensitive actions, per-bot memory and routines.
   - **Chat** with any bot, **kernel inspector** (lite / core / full, module toggles, spine), **kernel viewer**, **megaprompt studio**, **memory vault**, **playbooks**, **⌘K palette**.
 - **Any engine**, 25 providers in three groups:

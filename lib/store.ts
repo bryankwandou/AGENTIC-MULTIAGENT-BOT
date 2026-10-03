@@ -13,6 +13,8 @@ import { getProvider, type ProviderId } from "./engine/providers";
 export type ChatRole = "user" | "assistant";
 
 export type MessageMeta = {
+  /** The bot that wrote this reply (sessions can switch bots mid-thread). */
+  persona?: PersonaId;
   model?: string;
   ms?: number;
   kernelChars?: number;

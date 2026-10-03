@@ -44,7 +44,7 @@ type Act =
   | "security"
   | "booth"
   | "read";
-type Phase = "idle" | "thinking" | "waiting" | "writing" | "done" | "error" | "approval";
+export type Phase = "idle" | "thinking" | "waiting" | "writing" | "done" | "error" | "approval";
 
 /** chair: office-chair colour, or "stool" / "beanbag"; null = sits on the furniture itself (sofa). */
 type Spot = { x: number; y: number; face: Face; seat?: boolean; taken?: PersonaId | null; chair?: string | null };
