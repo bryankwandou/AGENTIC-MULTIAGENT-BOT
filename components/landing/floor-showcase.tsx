@@ -14,8 +14,8 @@ export function FloorShowcase({ maxims }: { maxims: string[] }) {
   }, []);
   return (
     <div className="relative overflow-hidden rounded-2xl border border-line-strong bg-bg shadow-[var(--shadow-pop)]">
-      <OfficeFloor simulate maxims={maxims} onLog={onLog} className="h-[62vh] min-h-[420px]" />
-      <div className="pointer-events-none absolute bottom-3 left-3 hidden w-[22rem] rounded-xl border border-line bg-bg/80 p-3 backdrop-blur md:block">
+      <OfficeFloor simulate roomNav maxims={maxims} onLog={onLog} className="h-[66vh] min-h-[440px]" />
+      <div className="pointer-events-none absolute top-3 left-3 hidden w-[22rem] rounded-xl border border-line bg-bg/80 p-3 backdrop-blur md:block">
         <p className="eyebrow">Ship-log · live</p>
         <ul className="mt-2 space-y-1 font-mono text-[10.5px] leading-snug">
           {log.length === 0 ? <li className="text-subtle">The floor is warming up…</li> : null}

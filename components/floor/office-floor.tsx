@@ -15,7 +15,27 @@ type Props = {
   onSnapshot?: (s: FloorSnapshot) => void;
   onLog?: (tag: string, text: string, tone?: "signal" | "warn" | "danger") => void;
   onPick?: (id: PersonaId) => void;
+  /** Show room chips for quick camera jumps. */
+  roomNav?: boolean;
 };
+
+const ROOM_CHIPS = [
+  { id: "office", name: "Office" },
+  { id: "meeting", name: "Meeting" },
+  { id: "boardroom", name: "Boardroom" },
+  { id: "lead", name: "Lead" },
+  { id: "canteen", name: "Canteen" },
+  { id: "game", name: "Game room" },
+  { id: "lounge", name: "Lounge" },
+  { id: "datacenter", name: "Data center" },
+  { id: "server", name: "Server" },
+  { id: "vault", name: "Vault" },
+  { id: "warehouse", name: "Warehouse" },
+  { id: "security", name: "Security" },
+  { id: "lobby", name: "Reception" },
+  { id: "booths", name: "Booths" },
+  { id: "library", name: "Library" },
+];
 
 function CamButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -30,7 +50,7 @@ function zoomCenter(w: FloorWorld, el: HTMLDivElement | null, f: number) {
   if (r) w.zoomAt(r.width / 2, r.height / 2, f);
 }
 
-export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, onLog, onPick }: Props) {
+export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, onLog, onPick, roomNav = false }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const world = useRef<FloorWorld | null>(null);
@@ -190,6 +210,27 @@ export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, o
           <Scan className="size-3.5" />
         </CamButton>
       </div>
+      {roomNav ? (
+        <div
+          className="absolute bottom-3 left-3 z-10 flex max-w-[calc(100%-1.5rem)] gap-1 overflow-x-auto rounded-xl border border-line bg-surface/80 p-1 backdrop-blur"
+          onPointerDown={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+        >
+          {ROOM_CHIPS.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => {
+                world.current?.focusRoom(r.id);
+                setFollow(false);
+              }}
+              className="h-7 shrink-0 rounded-lg px-2 font-mono text-[10px] text-muted uppercase hover:bg-elevated hover:text-fg"
+            >
+              {r.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {hovered && hover ? (
         <div
           className="pointer-events-none absolute z-10 w-52 -translate-x-1/2 -translate-y-full rounded-xl border border-line-strong bg-surface/95 px-3 py-2 shadow-[var(--shadow-pop)] backdrop-blur animate-fade"

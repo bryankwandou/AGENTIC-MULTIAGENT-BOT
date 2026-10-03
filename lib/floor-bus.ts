@@ -1,4 +1,6 @@
-import type { PersonaId } from "./catalog";
+import { PERSONAS, type PersonaId } from "./catalog";
+
+const who = (id: PersonaId) => PERSONAS.find((p) => p.id === id)?.bot ?? id;
 
 /** What happens on the station, as the Floor animation and its ship-log see it. */
 export type FloorEvent =
@@ -38,31 +40,31 @@ export function emitFloor(e: FloorEvent) {
   switch (e.type) {
     case "job":
       floorStats.jobs += 1;
-      push("Job", `${e.persona} took "${e.text.replace(/\s+/g, " ").slice(0, 64)}"`);
+      push("Job", `${who(e.persona)} took "${e.text.replace(/\s+/g, " ").slice(0, 64)}"`);
       break;
     case "compiled":
-      push("Kernel", `compiled ${e.chars.toLocaleString()}c for ${e.persona}${e.model ? ` → ${e.model}` : ""}`, "signal");
+      push("Kernel", `compiled ${e.chars.toLocaleString()}c for ${who(e.persona)}${e.model ? ` → ${e.model}` : ""}`, "signal");
       break;
     case "done":
       floorStats.chars += e.chars;
       floorStats.lastMs = e.ms;
       floorStats.lastModel = e.model ?? "";
-      push("Ship", `${e.persona} shipped ${e.chars.toLocaleString()} chars in ${(e.ms / 1000).toFixed(1)}s`, "signal");
+      push("Ship", `${who(e.persona)} shipped ${e.chars.toLocaleString()} chars in ${(e.ms / 1000).toFixed(1)}s`, "signal");
       break;
     case "error":
-      push("Error", `${e.persona}: ${e.message.slice(0, 90)}`, "danger");
+      push("Error", `${who(e.persona)}: ${e.message.slice(0, 90)}`, "danger");
       break;
     case "stopped":
-      push("Stop", `${e.persona} was told to stop`, "warn");
+      push("Stop", `${who(e.persona)} was told to stop`, "warn");
       break;
     case "handoff":
-      push("Handoff", `${e.from} → ${e.to}: ${e.text.replace(/\s+/g, " ").slice(0, 60)}`);
+      push("Handoff", `${who(e.from)} → ${who(e.to)}: ${e.text.replace(/\s+/g, " ").slice(0, 60)}`);
       break;
     case "wait":
-      push("Wait", `${e.persona} waiting — ${e.reason}`);
+      push("Wait", `${who(e.persona)} waiting — ${e.reason}`);
       break;
     case "approval":
-      push("Approval", `${e.persona} needs approval: ${e.action.slice(0, 70)}`, "warn");
+      push("Approval", `${who(e.persona)} needs approval: ${e.action.slice(0, 70)}`, "warn");
       break;
     case "approved":
       push("Approval", `${e.ok ? "approved" : "rejected"}: ${e.action.slice(0, 70)}`, e.ok ? "signal" : "danger");

@@ -14,6 +14,7 @@ import {
   ScrollText,
   SquareTerminal,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import { AxiomGlyph, Lamp } from "@/components/axiom-mark";
@@ -30,11 +31,14 @@ import { Inspector } from "./inspector";
 import { KernelDialog } from "./kernel-dialog";
 import { PlaybooksPanel } from "./playbooks-panel";
 import { StudioPanel } from "./studio-panel";
+import { TeamPanel } from "./team/team-panel";
+import { startRoutineClock } from "@/lib/team/client";
 import { VaultPanel } from "./vault-panel";
 
 const NAV: { id: ViewId; label: string; labelId: string; icon: typeof MessageSquare }[] = [
   { id: "chat", label: "Chat", labelId: "Chat", icon: MessageSquare },
   { id: "floor", label: "Floor", labelId: "Lantai", icon: Building2 },
+  { id: "team", label: "Team", labelId: "Tim", icon: Users },
   { id: "studio", label: "Studio", labelId: "Studio", icon: ScrollText },
   { id: "vault", label: "Vault", labelId: "Vault", icon: BookOpen },
   { id: "playbooks", label: "Playbooks", labelId: "Playbook", icon: SquareTerminal },
@@ -70,6 +74,8 @@ export function StationShell() {
   useEffect(() => {
     void Promise.resolve(useStation.persist.rehydrate()).then(() => setHydrated(true));
     void getEngineStatus().then(setEngine);
+    // Routine intervals tick while the station tab is open, whatever the view.
+    startRoutineClock();
   }, [setHydrated]);
 
   const stats = useMemo(() => megapromptStats(), []);
@@ -120,6 +126,10 @@ export function StationShell() {
         ? id
           ? "Lantai kantor — bot bekerja paralel"
           : "The floor — bots at work, in parallel"
+      : view === "team"
+        ? id
+          ? "Tim — rekan kerja paralel"
+          : "Team — teammates in parallel"
       : view === "studio"
         ? id
           ? "Studio megaprompt"
@@ -162,7 +172,7 @@ export function StationShell() {
           {id ? "Sesi baru" : "New session"}
         </button>
 
-        <nav className="grid grid-cols-5 gap-1 px-3">
+        <nav className="grid grid-cols-3 gap-1 px-3">
           {NAV.map((item) => {
             const Icon = item.icon;
             const on = view === item.id;
@@ -175,7 +185,7 @@ export function StationShell() {
                   setRailOpen(false);
                 }}
                 className={cn(
-                  "flex h-14 flex-col items-center justify-center gap-1 rounded-lg text-[8.5px] tracking-wider uppercase transition-colors",
+                  "flex h-12 flex-col items-center justify-center gap-1 rounded-lg text-[9.5px] tracking-wider uppercase transition-colors",
                   on ? "bg-elevated text-fg" : "text-muted hover:bg-elevated/50 hover:text-fg",
                 )}
               >
@@ -304,6 +314,7 @@ export function StationShell() {
           <main className="min-h-0 min-w-0 flex-1">
             {view === "chat" ? <ChatPanel engineReady={summary.live ? true : engine ? false : null} kernelChars={kernel.chars} /> : null}
             {view === "floor" ? <FloorPanel summary={summary} /> : null}
+            {view === "team" ? <TeamPanel /> : null}
             {view === "studio" ? <StudioPanel /> : null}
             {view === "vault" ? <VaultPanel /> : null}
             {view === "playbooks" ? <PlaybooksPanel /> : null}
