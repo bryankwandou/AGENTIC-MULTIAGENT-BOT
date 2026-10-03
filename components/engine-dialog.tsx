@@ -379,7 +379,7 @@ function EngineDialogBody(props: BodyProps) {
                 {models?.error ? <p className="mt-1.5 text-[11px] text-danger">{models.error}</p> : null}
                 {models && !models.loading && !models.error ? (
                   <p className="mt-1.5 font-mono text-[10px] text-signal">
-                    {models.list.length} {idUi ? "model ditemukan" : "models found"}
+                    {models.list.length} {idUi ? "model ditemukan" : models.list.length === 1 ? "model found" : "models found"}
                   </p>
                 ) : null}
                 {suggestions.length ? (
@@ -400,6 +400,19 @@ function EngineDialogBody(props: BodyProps) {
                   </div>
                 ) : null}
                 {p.note && !(p.local && fetched) ? <p className="mt-2 text-[11px] text-muted">{p.note}</p> : null}
+              </Field>
+            ) : null}
+
+            {p?.local ? (
+              <Field label={idUi ? "Jendela konteks" : "Context window"}>
+                <p className="text-[11.5px] leading-relaxed text-muted">
+                  {idUi
+                    ? "Kernel AXIOM ±7k token (LITE ±3k). Runtime lokal sering memuat model dengan konteks kecil dan diam-diam memotong kernel — beri model 16k:"
+                    : "AXIOM's kernel is ~7k tokens (LITE ~3k). Local runtimes often load models with a small context and silently cut the kernel — give the model 16k:"}
+                </p>
+                <code className="mt-1.5 block rounded-lg border border-line bg-inset px-3 py-2 font-mono text-[11px] break-all text-accent">
+                  {p.context ?? (idUi ? "naikkan context length server ke 16384" : "raise the server's context length to 16384")}
+                </code>
               </Field>
             ) : null}
 

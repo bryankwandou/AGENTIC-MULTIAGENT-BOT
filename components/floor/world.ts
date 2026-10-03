@@ -1,5 +1,6 @@
 import type { PersonaId } from "@/lib/catalog";
 import type { FloorEvent } from "@/lib/floor-bus";
+import { floorText, npcName, roomName, type Doing, type FloorLang } from "./i18n";
 
 const HW = 16;
 const HH = 8;
@@ -206,19 +207,6 @@ const LOOKS: Record<PersonaId, Look> = {
   tutor: { skin: "#69432f", hair: "#1d1612", style: "curly", pants: "#3d3932", acc: "cardigan" },
 };
 
-const SMALL_TALK = [
-  "Artifact first.",
-  "Truth over comfort.",
-  "Did the kernel fit the budget?",
-  "Coffee's fresh.",
-  "Shipping in five.",
-  "Who touched the vault?",
-  "Short is a courtesy.",
-  "The boring version ships.",
-  "Names are promises.",
-  "Keep the glass clean.",
-];
-
 /* ---------------------------------------------------------------- geometry & color */
 
 function iso(x: number, y: number, z = 0): [number, number] {
@@ -370,12 +358,15 @@ export class FloorWorld {
   private lastPersona: PersonaId = "operator";
   private simulate: boolean;
   private simNext = 0;
-  private maxims: string[];
+  /** Explicit lines (landing page); otherwise the language's small talk. */
+  private maxims: string[] | null;
+  /** UI language for bubbles, statuses, logs and room names. */
+  private lang: FloorLang = "en";
   private skyline: { x: number; h: number; w: number }[] = [];
 
   constructor(bots: BotInfo[], opts: { simulate?: boolean; maxims?: string[] } = {}) {
     this.simulate = Boolean(opts.simulate);
-    this.maxims = opts.maxims?.length ? opts.maxims : SMALL_TALK;
+    this.maxims = opts.maxims?.length ? opts.maxims : null;
     this.buildMap();
     bots.slice(0, 6).forEach((b, i) => {
       const [dx, dy] = BOT_DESKS[b.id];
@@ -924,8 +915,8 @@ export class FloorWorld {
         if (!a) return;
         a.phase = "done";
         a.phaseAt = now;
-        a.note = `${e.chars.toLocaleString()} chars · ${(e.ms / 1000).toFixed(1)}s${e.model ? ` · ${e.model}` : ""}`;
-        this.say(a, `✓ Shipped · ${a.note}`, "ok", 5200);
+        a.note = `${e.chars.toLocaleString()} ${this.t.chars} · ${(e.ms / 1000).toFixed(1)}s${e.model ? ` · ${e.model}` : ""}`;
+        this.say(a, this.t.shipped(a.note), "ok", 5200);
         if (a.spot === a.desk && !a.goal) {
           a.act = "lean";
           a.actAt = now;
@@ -951,7 +942,7 @@ export class FloorWorld {
         a.act = "shrug";
         a.actAt = now;
         a.until = now + 1700;
-        this.say(a, "Stopped.", "warn", 2200);
+        this.say(a, this.t.stopped, "warn", 2200);
         break;
       }
       case "handoff": {
@@ -974,7 +965,7 @@ export class FloorWorld {
         a.phase = "waiting";
         a.phaseAt = now;
         this.go(a, this.freeSpot(this.coffee, a), "coffee");
-        this.say(a, `Waiting — ${short(e.reason, 36)} ☕`, "think", 60000);
+        this.say(a, this.t.waiting(short(e.pending !== undefined ? this.t.teammates(e.pending) : e.reason, 36)), "think", 60000);
         break;
       }
       case "approval": {
@@ -983,14 +974,14 @@ export class FloorWorld {
         a.phase = "approval";
         a.phaseAt = now;
         this.home(a, "approval");
-        this.say(a, `Needs approval: ${short(e.action, 44)}`, "warn", 120000);
+        this.say(a, this.t.needsApproval(short(e.action, 44)), "warn", 120000);
         break;
       }
       case "approved": {
         const a = this.agent(e.persona);
         if (!a) return;
         a.phase = "idle";
-        this.say(a, e.ok ? "Approved — executing." : "Rejected — standing down.", e.ok ? "ok" : "err", 3600);
+        this.say(a, e.ok ? this.t.approved : this.t.rejected, e.ok ? "ok" : "err", 3600);
         this.home(a, "desk");
         break;
       }
@@ -998,7 +989,7 @@ export class FloorWorld {
         const a = this.agent(this.lastPersona) ?? this.agents[0];
         if (!a) return;
         this.go(a, this.freeSpot(this.vaultSpots, a), "vault", 4200);
-        this.say(a, "Filing that in the vault.", "say", 3600);
+        this.say(a, this.t.vaultNote, "say", 3600);
         break;
       }
       case "ambient":
@@ -1013,43 +1004,44 @@ export class FloorWorld {
     const pick = <T,>(list: T[]) => list[Math.floor(hash(this.now + a.seed * 7) * list.length) % list.length]!;
     if (r < 0.15) {
       this.go(a, this.freeSpot(this.coffee, a), "coffee", 5000 + r * 30000);
-      this.log("Canteen", `${a.bot} grabbed a coffee`);
+      this.log(this.room("canteen"), this.t.log.coffee(a.bot));
     } else if (r < 0.27) {
       this.go(a, this.freeSpot(this.canteenSeats, a), "eat", 11000 + r * 20000);
-      this.say(a, "Lunch.", "say", 1800);
-      this.log("Canteen", `${a.bot} is eating in the canteen`);
+      this.say(a, this.t.lunch, "say", 1800);
+      this.log(this.room("canteen"), this.t.log.eat(a.bot));
     } else if (r < 0.37 && idleAtDesk.length && !this.pong.some((p) => p.taken)) {
       const mate = pick(idleAtDesk);
       this.go(a, this.pong[0]!, "pingpong", 16000);
       this.go(mate, this.pong[1]!, "pingpong", 16000);
       mate.nextAmbient = this.now + 30000;
-      this.say(a, `${mate.bot}, ping-pong?`, "say", 2600);
-      this.log("Game room", `${a.bot} and ${mate.bot} are playing ping-pong`);
+      this.say(a, this.t.pingpong(mate.bot), "say", 2600);
+      this.log(this.room("game"), this.t.log.pingpong(a.bot, mate.bot));
     } else if (r < 0.43) {
       this.go(a, this.freeSpot(this.arcadeSpots, a), "arcade", 9000);
-      this.log("Game room", `${a.bot} is on the arcade`);
+      this.log(this.room("game"), this.t.log.arcade(a.bot));
     } else if (r < 0.47) {
       this.go(a, this.freeSpot(this.tvSpots, a), "tv", 10000);
     } else if (r < 0.56 && idleAtDesk.length) {
       const host = pick(idleAtDesk);
       a.visitOf = host.id;
       this.go(a, this.besideDesk(host), "visit", 4500);
-      this.say(a, this.maxims[Math.floor(r * 1000) % this.maxims.length]!, "say", 3400);
+      const talk = this.maxims ?? this.t.smallTalk;
+      this.say(a, talk[Math.floor(r * 1000) % talk.length]!, "say", 3400);
     } else if (r < 0.62) {
       this.go(a, this.freeSpot(this.warehouseSpots, a), "warehouse", 4200);
-      this.log("Warehouse", `${a.bot} is fetching a box`);
+      this.log(this.room("warehouse"), this.t.log.box(a.bot));
     } else if (r < 0.66) {
       this.go(a, this.freeSpot(this.securitySpots, a), "security", 5000);
-      this.say(a, "All quiet on the cameras?", "say", 2600);
+      this.say(a, this.t.cameras, "say", 2600);
     } else if (r < 0.71) {
       this.go(a, this.freeSpot(this.boothSpots, a), "booth", 9000);
-      this.log("Booths", `${a.bot} took a call in a focus booth`);
+      this.log(this.room("booths"), this.t.log.booth(a.bot));
     } else if (r < 0.77) {
       this.go(a, this.freeSpot(hash(this.now) < 0.5 ? this.librarySpots : this.libSeats, a), "read", 9000);
-      this.log("Library", `${a.bot} is reading in the library`);
+      this.log(this.room("library"), this.t.log.read(a.bot));
     } else if (r < 0.81) {
       this.go(a, this.freeSpot(this.vaultSpots, a), "vault", 5000);
-      this.log("Vault", `${a.bot} checked the vault`);
+      this.log(this.room("vault"), this.t.log.vault(a.bot));
     } else if (r < 0.86) {
       this.go(a, this.freeSpot(this.sofa, a), "sofa", 8000);
     } else if (r < 0.89) {
@@ -1060,7 +1052,7 @@ export class FloorWorld {
       this.go(a, this.freeSpot(this.misc.cooler, a), "cooler", 4000);
     } else {
       this.go(a, this.freeSpot(this.serverSpots, a), "server", 4500);
-      this.log("Data center", `${a.bot} walked the server aisles`);
+      this.log(this.room("datacenter"), this.t.log.server(a.bot));
     }
   }
 
@@ -1068,6 +1060,11 @@ export class FloorWorld {
   private besideDesk(host: Agent): Spot {
     const s = host.desk;
     return s.face === "S" ? { x: s.x + 0.95, y: s.y - 0.15, face: "W" } : { x: s.x - 0.95, y: s.y + 0.2, face: "E" };
+  }
+
+  private room(id: string) {
+    const r = ROOMS.find((x) => x.id === id);
+    return r ? roomName(r, this.lang) : id;
   }
 
   private log(tag: string, text: string, tone?: "signal" | "warn" | "danger") {
@@ -1162,8 +1159,8 @@ export class FloorWorld {
         a.phase = "waiting";
         a.phaseAt = this.now;
         this.go(a, this.freeSpot(this.coffee, a), "coffee");
-        this.say(a, "Engine is still thinking — coffee ☕", "think", 60000);
-        this.log("Wait", `${a.bot} is waiting on the engine — coffee`);
+        this.say(a, this.t.engineCoffee, "think", 60000);
+        this.log(this.t.log.waitTag, this.t.log.engineWait(a.bot));
       }
       if (a.phase === "done" && this.now - a.phaseAt > 6000) {
         a.phase = "idle";
@@ -1303,59 +1300,43 @@ export class FloorWorld {
 
   snapshot(): FloorSnapshot {
     const counts = { desk: 0, walking: 0, meeting: 0, coffee: 0, other: 0 };
-    const doing: Partial<Record<Act, string>> = {
-      think: "thinking in the meeting room",
-      coffee: "coffee in the canteen",
-      eat: "eating in the canteen",
-      pingpong: "playing ping-pong",
-      arcade: "on the arcade",
-      tv: "gaming on the TV",
-      warehouse: "fetching a box in the warehouse",
-      security: "chatting with security",
-      booth: "on a call in a focus booth",
-      read: "reading in the library",
-      vault: "in the vault",
-      server: "walking the server aisles",
-      sofa: "resting in the lounge",
-      window: "looking out the window",
-      print: "at the printer",
-      cooler: "at the water cooler",
-      visit: "talking to a teammate",
-    };
+    const T = this.t;
+    const name = (r: Room | undefined, fallback: string) => (r ? roomName(r, this.lang) : fallback).toLowerCase();
     const agents = this.agents.map((a) => {
       const walking = Boolean(a.goal);
       const room = roomAt(a.x, a.y);
-      const where = walking ? "walking" : a.spot === a.desk ? "desk" : (room?.name ?? "floor").toLowerCase();
+      const where = walking ? T.where.walking : a.spot === a.desk ? T.where.desk : name(room, T.where.floor);
       if (walking) counts.walking++;
       else if (a.spot === a.desk) counts.desk++;
       else if (room?.id === "meeting" || room?.id === "boardroom") counts.meeting++;
       else if (room?.id === "canteen") counts.coffee++;
       else counts.other++;
-      const dest = a.goal ? (roomAt(a.goal.spot.x, a.goal.spot.y)?.name ?? "the floor").toLowerCase() : "";
+      const dest = a.goal ? name(roomAt(a.goal.spot.x, a.goal.spot.y), T.where.floor) : "";
+      const doing = T.status.doing[a.act as Doing] as string | undefined;
       const status =
         a.phase === "thinking"
           ? a.goal
-            ? `heading to the ${dest} to think`
-            : `thinking in the ${(room?.name ?? "meeting room").toLowerCase()}`
+            ? T.status.toThink(dest)
+            : T.status.thinkingIn(name(room, T.where.meeting))
           : a.phase === "waiting"
             ? a.goal
-              ? "background wait — off to the canteen"
-              : "waiting on background work — coffee"
+              ? T.status.bgWalk
+              : T.status.bgCoffee
             : a.phase === "writing"
               ? a.goal
-                ? "rushing back to the desk to write"
-                : "writing at the desk"
+                ? T.status.rushing
+                : T.status.writing
               : a.phase === "done"
-                ? `shipped · ${a.note}`
+                ? T.status.shipped(a.note)
                 : a.phase === "error"
-                  ? `inspecting the ${(room?.name ?? "server room").toLowerCase()}`
+                  ? T.status.inspecting(name(room, T.where.serverRoom))
                   : a.phase === "approval"
-                    ? "waiting for your approval"
+                    ? T.status.approval
                     : walking
-                      ? `walking to the ${dest}${a.carry === "box" ? " with a box" : ""}`
+                      ? T.status.walkingTo(dest, a.carry === "box")
                       : a.spot === a.desk
-                        ? "working at the desk"
-                        : (doing[a.act] ?? `in the ${where}`);
+                        ? T.status.atDesk
+                        : (doing ?? T.status.inRoom(where));
       const elapsed = this.now - a.phaseAt;
       const progress =
         a.phase === "writing" ? Math.min(0.95, 0.15 + a.stream.length / 1600) : a.phase === "thinking" ? Math.min(0.5, elapsed / 12000) : a.phase === "waiting" ? 0.45 : a.phase === "done" ? 1 : 0;
@@ -1366,7 +1347,7 @@ export class FloorWorld {
 
   /** Rooms for quick camera jumps. */
   rooms(): { id: string; name: string }[] {
-    return ROOMS.filter((r) => !r.id.startsWith("hall")).map((r) => ({ id: r.id, name: r.name }));
+    return ROOMS.filter((r) => !r.id.startsWith("hall")).map((r) => ({ id: r.id, name: roomName(r, this.lang) }));
   }
 
   focusRoom(id: string) {
@@ -1433,6 +1414,16 @@ export class FloorWorld {
       }
       c.restore();
     }
+  }
+
+  setLang(lang: FloorLang) {
+    if (lang === this.lang) return;
+    this.lang = lang;
+    this.cache = null; // room names live in the cached static layer
+  }
+
+  private get t() {
+    return floorText(this.lang);
   }
 
   /** Pin the camera to one bot (null to release). */
@@ -2014,17 +2005,18 @@ export class FloorWorld {
         c.textAlign = "left";
         c.fillText(text, 5, -73.6);
       });
-    sign(0.9, "DATA CENTER");
-    sign(12.4, "SERVER ROOM · KERNEL");
-    sign(18.4, "VAULT");
-    sign(24.4, "WAREHOUSE");
-    sign(34.4, "SECURITY");
+    const S = this.t.signs;
+    sign(0.9, S.datacenter);
+    sign(12.4, S.server);
+    sign(18.4, S.vault);
+    sign(24.4, S.warehouse);
+    sign(34.4, S.security);
 
     // Floor labels (pills), like a floor plan.
     for (const r of ROOMS) {
       if (!r.label) continue;
       const [sx, sy] = iso(r.label[0], r.label[1]);
-      const text = r.name.toUpperCase();
+      const text = roomName(r, this.lang).toUpperCase();
       c.font = "600 5.6px IBM Plex Mono, monospace";
       const tw = c.measureText(text).width;
       c.fillStyle = "rgba(10,11,12,0.74)";
@@ -2121,7 +2113,7 @@ export class FloorWorld {
         c.fillStyle = "rgba(214,211,200,0.7)";
         c.font = "600 2.4px IBM Plex Mono, monospace";
         c.textAlign = "left";
-        c.fillText(r.name.toUpperCase().slice(0, 12), fx + 1.6, fy + sh - 1.2);
+        c.fillText(roomName(r, this.lang).toUpperCase().slice(0, 12), fx + 1.6, fy + sh - 1.2);
         if (Math.floor(t * 1.5 + i) % 2) {
           c.fillStyle = "#c45c4a";
           c.beginPath();
@@ -2316,7 +2308,8 @@ export class FloorWorld {
     c.fillStyle = palette[2]!;
     c.font = "700 9px IBM Plex Mono, monospace";
     c.textAlign = "left";
-    const tag = { say: "", think: a.phase === "waiting" ? " · WAITING" : " · THINKING", stream: " · WRITING", ok: " · SHIPPED", err: " · ERROR", warn: a.phase === "approval" ? " · APPROVAL" : "" }[b.kind];
+    const T = this.t.tag;
+    const tag = { say: "", think: a.phase === "waiting" ? T.wait : T.think, stream: T.write, ok: T.ok, err: T.err, warn: a.phase === "approval" ? T.approval : "" }[b.kind];
     c.fillText(`${head.toUpperCase()}${tag}`, bx + 19, by + 15);
     c.fillStyle = palette[1]!;
     c.font = "500 11.5px IBM Plex Sans, system-ui, sans-serif";
@@ -4080,7 +4073,7 @@ export class FloorWorld {
               { x: n.home.x, y: n.home.y },
             ];
             n.next = this.now + 70000 + hash(this.now) * 50000;
-            this.log("Security", "Sentry started a patrol");
+            this.log(this.room("security"), this.t.log.patrol(npcName(n.kind, n.name, this.lang)));
           } else {
             const pts = [
               { x: 26, y: 3.5 },
@@ -4286,13 +4279,14 @@ export class FloorWorld {
       const sx = wx * v.s + v.ox;
       const sy = wy * v.s + v.oy;
       c.font = "600 9px IBM Plex Mono, monospace";
-      const tw = c.measureText(n.name).width;
+      const label = npcName(n.kind, n.name, this.lang);
+      const tw = c.measureText(label).width;
       c.fillStyle = "rgba(10,11,12,0.55)";
       rr(c, sx - tw / 2 - 6, sy - 7.5, tw + 12, 13, 6.5);
       c.fill();
       c.fillStyle = "rgba(196,165,116,0.9)";
       c.textAlign = "center";
-      c.fillText(n.name, sx, sy + 2.5);
+      c.fillText(label, sx, sy + 2.5);
     }
   }
 

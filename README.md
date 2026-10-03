@@ -45,6 +45,8 @@ A team of named AI bots that runs on a 5,269-line constitution, works in paralle
 - **Running AXIOM on your own machine** (`npm run dev`): pick the runtime in Engine. The server proxies it, so no CORS setup is needed.
 - **On a deployed site** (e.g. Vercel): the server cannot reach `localhost` on your laptop, so the station calls your runtime **from the browser**. Allow the site's origin in the runtime once. The Engine panel shows the exact command, e.g. `OLLAMA_ORIGINS="https://your-app.vercel.app" ollama serve`, or "Enable CORS" in LM Studio. Chat and Team runs both work this way: in browser mode the Team orchestrator runs in the tab.
 - **A self-hosted server next to its runtime**: set `OLLAMA_BASE_URL` (or `LMSTUDIO_BASE_URL`, `VLLM_BASE_URL`, …) and every visitor uses it. Set `ALLOW_LOCAL_ENGINES=true` only on a server you alone use.
+- **Context window**: the core kernel is about 7k tokens (LITE about 3k). Local runtimes often load models with a small context and silently cut the start of the prompt, so give the model 16k: for example `OLLAMA_CONTEXT_LENGTH=16384 ollama serve`, `llama-server -c 16384`, or Context Length in LM Studio. The Engine panel shows the setting for each runtime.
+- **Team runs on local models** get minutes instead of the 60-second budget used for hosted engines. A local server usually answers one call at a time, so the lanes queue.
 
 ## Architecture
 
