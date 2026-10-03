@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  Building2,
   BookOpen,
   Command,
   Download,
@@ -24,6 +25,7 @@ import { useStation } from "@/lib/store";
 import { ChatPanel } from "./chat-panel";
 import { CommandPalette } from "./command-palette";
 import { EngineDialog, engineSummary } from "./engine-dialog";
+import { FloorPanel } from "./floor/floor-panel";
 import { Inspector } from "./inspector";
 import { KernelDialog } from "./kernel-dialog";
 import { PlaybooksPanel } from "./playbooks-panel";
@@ -32,6 +34,7 @@ import { VaultPanel } from "./vault-panel";
 
 const NAV: { id: ViewId; label: string; labelId: string; icon: typeof MessageSquare }[] = [
   { id: "chat", label: "Chat", labelId: "Chat", icon: MessageSquare },
+  { id: "floor", label: "Floor", labelId: "Lantai", icon: Building2 },
   { id: "studio", label: "Studio", labelId: "Studio", icon: ScrollText },
   { id: "vault", label: "Vault", labelId: "Vault", icon: BookOpen },
   { id: "playbooks", label: "Playbooks", labelId: "Playbook", icon: SquareTerminal },
@@ -113,6 +116,10 @@ export function StationShell() {
   const title =
     view === "chat"
       ? session?.title
+      : view === "floor"
+        ? id
+          ? "Lantai kantor — bot bekerja paralel"
+          : "The floor — bots at work, in parallel"
       : view === "studio"
         ? id
           ? "Studio megaprompt"
@@ -155,7 +162,7 @@ export function StationShell() {
           {id ? "Sesi baru" : "New session"}
         </button>
 
-        <nav className="grid grid-cols-4 gap-1 px-3">
+        <nav className="grid grid-cols-5 gap-1 px-3">
           {NAV.map((item) => {
             const Icon = item.icon;
             const on = view === item.id;
@@ -168,7 +175,7 @@ export function StationShell() {
                   setRailOpen(false);
                 }}
                 className={cn(
-                  "flex h-14 flex-col items-center justify-center gap-1 rounded-lg text-[9.5px] tracking-wider uppercase transition-colors",
+                  "flex h-14 flex-col items-center justify-center gap-1 rounded-lg text-[8.5px] tracking-wider uppercase transition-colors",
                   on ? "bg-elevated text-fg" : "text-muted hover:bg-elevated/50 hover:text-fg",
                 )}
               >
@@ -296,11 +303,12 @@ export function StationShell() {
         <div className="flex min-h-0 flex-1">
           <main className="min-h-0 min-w-0 flex-1">
             {view === "chat" ? <ChatPanel engineReady={summary.live ? true : engine ? false : null} kernelChars={kernel.chars} /> : null}
+            {view === "floor" ? <FloorPanel summary={summary} /> : null}
             {view === "studio" ? <StudioPanel /> : null}
             {view === "vault" ? <VaultPanel /> : null}
             {view === "playbooks" ? <PlaybooksPanel /> : null}
           </main>
-          {inspectorOpen ? (
+          {inspectorOpen && view !== "floor" ? (
             <div className="hidden min-h-0 w-[20rem] shrink-0 border-l border-line bg-surface/40 lg:block">
               <Inspector summary={summary} kernel={kernel} stats={stats} />
             </div>

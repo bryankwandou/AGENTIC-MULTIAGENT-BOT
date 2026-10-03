@@ -1,0 +1,208 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { Crosshair, Minus, Plus, Scan } from "lucide-react";
+import { PERSONAS, type PersonaId } from "@/lib/catalog";
+import { cn } from "@/lib/cn";
+import { onFloor } from "@/lib/floor-bus";
+import { FloorWorld, type FloorSnapshot } from "./world";
+
+type Props = {
+  /** Landing-page mode: the floor invents its own jobs instead of listening to the station. */
+  simulate?: boolean;
+  maxims?: string[];
+  className?: string;
+  onSnapshot?: (s: FloorSnapshot) => void;
+  onLog?: (tag: string, text: string, tone?: "signal" | "warn" | "danger") => void;
+  onPick?: (id: PersonaId) => void;
+};
+
+function CamButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} title={label} aria-label={label} className="flex size-7 items-center justify-center rounded-lg text-muted hover:bg-elevated hover:text-fg">
+      {children}
+    </button>
+  );
+}
+
+function zoomCenter(w: FloorWorld, el: HTMLDivElement | null, f: number) {
+  const r = el?.getBoundingClientRect();
+  if (r) w.zoomAt(r.width / 2, r.height / 2, f);
+}
+
+export function OfficeFloor({ simulate = false, maxims, className, onSnapshot, onLog, onPick }: Props) {
+  const wrap = useRef<HTMLDivElement>(null);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const world = useRef<FloorWorld | null>(null);
+  const cb = useRef({ onSnapshot, onLog, onPick });
+  cb.current = { onSnapshot, onLog, onPick };
+  const [hover, setHover] = useState<{ id: PersonaId; x: number; y: number } | null>(null);
+  const [follow, setFollow] = useState(true);
+  const drag = useRef<{ x: number; y: number; moved: number } | null>(null);
+
+  useEffect(() => {
+    const el = canvas.current;
+    const box = wrap.current;
+    if (!el || !box) return;
+    const ctx = el.getContext("2d");
+    if (!ctx) return;
+    const w = new FloorWorld(
+      PERSONAS.map((p) => ({ id: p.id, bot: p.bot, role: p.name, color: p.color })),
+      { simulate, maxims },
+    );
+    w.onLog = (tag, text, tone) => cb.current.onLog?.(tag, text, tone);
+    world.current = w;
+    const off = simulate ? () => {} : onFloor((e) => w.handle(e));
+
+    let cssW = 0;
+    let cssH = 0;
+    let dpr = 1;
+    const size = () => {
+      const r = box.getBoundingClientRect();
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      cssW = Math.max(1, r.width);
+      cssH = Math.max(1, r.height);
+      el.width = Math.round(cssW * dpr);
+      el.height = Math.round(cssH * dpr);
+    };
+    size();
+    const ro = new ResizeObserver(size);
+    ro.observe(box);
+
+    let visible = true;
+    const io = new IntersectionObserver(([entry]) => {
+      visible = Boolean(entry?.isIntersecting);
+    });
+    io.observe(box);
+
+    let raf = 0;
+    const loop = (t: number) => {
+      raf = requestAnimationFrame(loop);
+      if (!visible || document.hidden) return;
+      w.tick(t);
+      w.render(ctx, cssW, cssH, dpr);
+    };
+    raf = requestAnimationFrame(loop);
+    const snap = window.setInterval(() => {
+      cb.current.onSnapshot?.(w.snapshot());
+      setFollow(w.follow);
+    }, 400);
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const r = box.getBoundingClientRect();
+      w.zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015));
+      setFollow(false);
+    };
+    box.addEventListener("wheel", onWheel, { passive: false });
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearInterval(snap);
+      ro.disconnect();
+      io.disconnect();
+      box.removeEventListener("wheel", onWheel);
+      off();
+      world.current = null;
+    };
+  }, [simulate, maxims]);
+
+  const pick = (e: React.PointerEvent) => {
+    const r = wrap.current?.getBoundingClientRect();
+    const w = world.current;
+    if (!r || !w) return null;
+    return w.hit(e.clientX - r.left, e.clientY - r.top);
+  };
+
+  const hovered = hover ? PERSONAS.find((p) => p.id === hover.id) : null;
+  const snap = hover ? world.current?.snapshot().agents.find((a) => a.id === hover.id) : null;
+
+  return (
+    <div
+      ref={wrap}
+      className={cn("relative overflow-hidden", className)}
+      onPointerDown={(e) => {
+        drag.current = { x: e.clientX, y: e.clientY, moved: 0 };
+        (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        if (d) {
+          const dx = e.clientX - d.x;
+          const dy = e.clientY - d.y;
+          d.moved += Math.abs(dx) + Math.abs(dy);
+          if (d.moved > 4) {
+            world.current?.panBy(dx, dy);
+            setFollow(false);
+            setHover(null);
+          }
+          d.x = e.clientX;
+          d.y = e.clientY;
+          if (d.moved > 4) return;
+        }
+        const id = pick(e);
+        const pos = id ? world.current?.headAt(id) : null;
+        setHover(id && pos ? { id, x: pos[0], y: pos[1] } : null);
+      }}
+      onPointerUp={(e) => {
+        const d = drag.current;
+        drag.current = null;
+        if (d && d.moved <= 4) {
+          const id = pick(e);
+          if (id) cb.current.onPick?.(id);
+        }
+      }}
+      onPointerLeave={() => setHover(null)}
+      onDoubleClick={() => {
+        world.current?.resetCamera();
+        setFollow(true);
+      }}
+      style={{ cursor: drag.current && drag.current.moved > 4 ? "grabbing" : hover ? "pointer" : "grab", touchAction: "none" }}
+    >
+      <canvas ref={canvas} className="absolute inset-0 h-full w-full" aria-label="AXIOM office floor: the bots at work" role="img" />
+      <div className="absolute top-3 right-3 z-10 flex items-center gap-1 rounded-xl border border-line bg-surface/80 p-1 backdrop-blur" onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={() => {
+            if (!world.current) return;
+            if (follow) world.current.follow = false;
+            else world.current.resetCamera();
+            setFollow(!follow);
+          }}
+          className={cn("flex h-7 items-center gap-1.5 rounded-lg px-2 font-mono text-[10px] uppercase", follow ? "bg-accent text-accent-fg" : "text-muted hover:text-fg")}
+          title="Camera follows the busy bots"
+        >
+          <Crosshair className="size-3.5" /> follow
+        </button>
+        <CamButton label="Zoom in" onClick={() => world.current && zoomCenter(world.current, wrap.current, 1.25)}>
+          <Plus className="size-3.5" />
+        </CamButton>
+        <CamButton label="Zoom out" onClick={() => world.current && zoomCenter(world.current, wrap.current, 0.8)}>
+          <Minus className="size-3.5" />
+        </CamButton>
+        <CamButton
+          label="Overview"
+          onClick={() => {
+            world.current?.resetCamera();
+            if (world.current) world.current.follow = false;
+            setFollow(false);
+          }}
+        >
+          <Scan className="size-3.5" />
+        </CamButton>
+      </div>
+      {hovered && hover ? (
+        <div
+          className="pointer-events-none absolute z-10 w-52 -translate-x-1/2 -translate-y-full rounded-xl border border-line-strong bg-surface/95 px-3 py-2 shadow-[var(--shadow-pop)] backdrop-blur animate-fade"
+          style={{ left: hover.x, top: hover.y - 46 }}
+        >
+          <p className="flex items-center gap-2 text-sm font-medium">
+            <span className="size-2 rounded-full" style={{ background: hovered.color }} />
+            {hovered.bot} <span className="font-normal text-muted">· {hovered.name}</span>
+          </p>
+          <p className="mt-0.5 text-xs text-muted">{snap?.status ?? hovered.blurb}</p>
+          {onPick ? <p className="mt-1 font-mono text-[10px] text-subtle">click to assign the next job</p> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}

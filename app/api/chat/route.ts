@@ -130,7 +130,8 @@ function demoStream(
   const tokens = text.match(/\S+\s*|\s+/g) ?? [text];
   return new ReadableStream<Uint8Array>({
     async start(controller) {
-      await sleep(380);
+      // Scripted "thinking" time. /research deliberately runs long so the floor shows a background wait.
+      await sleep(/^\/research\b/i.test(question.trim()) ? 11000 : 1200 + Math.random() * 2400);
       controller.enqueue(sse({ meta: { model: "demo", kernelChars: kernel.chars, sections: kernel.used.length, truncated: kernel.truncated } }));
       for (const t of tokens) {
         controller.enqueue(sse({ token: t }));
