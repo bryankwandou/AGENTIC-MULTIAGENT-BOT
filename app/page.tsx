@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Command, Cpu, Database, FileText, Layers, ScanEye, Sparkles } from "lucide-react";
 import { AxiomAvatar, AxiomGlyph, Lamp } from "@/components/axiom-mark";
+import { FloorShowcase } from "@/components/landing/floor-showcase";
 import { SpineShowcase } from "@/components/landing/spine-showcase";
 import { CORE_MODULE_IDS, MODULES, PERSONAS, SLASH_COMMANDS } from "@/lib/catalog";
 import { PROVIDERS } from "@/lib/engine/providers";
@@ -71,6 +72,7 @@ export default function Landing() {
             <a href="#mind" className="hover:text-fg">The mind</a>
             <a href="#personas" className="hover:text-fg">Personas</a>
             <a href="#station" className="hover:text-fg">Station</a>
+            <a href="#floor" className="hover:text-fg">Floor</a>
           </nav>
           <Link
             href="/station"
@@ -327,6 +329,43 @@ export default function Landing() {
                   <p className="font-medium">{f.t}</p>
                   <p className="mt-1 text-sm leading-relaxed text-muted">{f.d}</p>
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FLOOR */}
+      <section id="floor" className="scroll-mt-20 border-t border-line bg-surface/30">
+        <div className="mx-auto max-w-6xl px-4 py-24 md:px-6">
+          <div className="grid gap-8 md:grid-cols-[1.1fr_1fr] md:items-end">
+            <div>
+              <p className="eyebrow">05 — The floor</p>
+              <h2 className="mt-4 font-display text-4xl leading-[1.05] font-semibold tracking-tight md:text-5xl">
+                Six bots. One office. <span className="text-muted">Working in parallel.</span>
+              </h2>
+            </div>
+            <p className="text-base leading-relaxed text-muted text-pretty">
+              Every bot&apos;s body follows its real response phase: thinking sends it to the meeting room, a slow engine
+              sends it for coffee, streaming tokens bring it back to the desk to type, a handoff walks it to a teammate,
+              an error sends it to the kernel room. Below, the floor runs on its own; in the station it is driven by your jobs.
+            </p>
+          </div>
+          <div className="mt-10">
+            <FloorShowcase maxims={lines.slice(0, 16)} />
+          </div>
+          <div className="mt-6 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-3 lg:grid-cols-6">
+            {[
+              ["Thinking", "meeting room"],
+              ["Waiting", "coffee bar"],
+              ["Writing", "desk, typing"],
+              ["Handoff", "teammate's desk"],
+              ["Error", "kernel room"],
+              ["Approval", "hand raised"],
+            ].map(([k, v]) => (
+              <div key={k} className="bg-bg px-4 py-3">
+                <p className="font-mono text-[10px] tracking-[0.14em] text-signal uppercase">{k}</p>
+                <p className="mt-1 text-sm text-muted">{v}</p>
               </div>
             ))}
           </div>

@@ -49,6 +49,7 @@ export function CommandPalette({ onExport }: { onExport: () => void }) {
       { id: "export", group: "Session", label: "Export session as Markdown", run: () => (onExport(), close()) },
       { id: "insp", group: "Session", label: "Toggle inspector", run: () => (st().setInspectorOpen(!st().inspectorOpen), close()) },
       { id: "v-chat", group: "Go to", label: "Chat", run: view("chat") },
+      { id: "v-floor", group: "Go to", label: "The floor (live office)", run: view("floor") },
       { id: "v-studio", group: "Go to", label: "Megaprompt studio", run: view("studio") },
       { id: "v-vault", group: "Go to", label: "Memory vault", run: view("vault") },
       { id: "v-pb", group: "Go to", label: "Playbooks", run: view("playbooks") },
